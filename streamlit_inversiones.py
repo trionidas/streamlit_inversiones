@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-from pypfopt import EfficientFrontier, risk_models, expected_returns
+# from pypfopt import EfficientFrontier, risk_models, expected_returns
 import io
 import re
 import numpy as np
@@ -298,54 +298,54 @@ import numpy as np
 
 import numpy as np
 
-def optimize_portfolio(df, results, exclude_ticker='0P0000IKFS.F'):
-    tickers = [ticker for ticker in df['TICKER'].unique() if ticker != exclude_ticker]
-    start_date = df['FECHA'].min()
-    end_date = datetime.now()
+# def optimize_portfolio(df, results, exclude_ticker='0P0000IKFS.F'):
+#     tickers = [ticker for ticker in df['TICKER'].unique() if ticker != exclude_ticker]
+#     start_date = df['FECHA'].min()
+#     end_date = datetime.now()
     
-    prices = {}
-    ticker_data_counts = {}
-    for ticker in tickers:
-        hist = get_historical_data(ticker, start_date, end_date)
-        hist.index = hist.index.normalize()
-        prices[ticker] = hist['Close']
-        ticker_data_counts[ticker] = hist['Close'].count()
+#     prices = {}
+#     ticker_data_counts = {}
+#     for ticker in tickers:
+#         hist = get_historical_data(ticker, start_date, end_date)
+#         hist.index = hist.index.normalize()
+#         prices[ticker] = hist['Close']
+#         ticker_data_counts[ticker] = hist['Close'].count()
     
-    st.write("Información de datos por ticker:")
-    for ticker, count in ticker_data_counts.items():
-        st.write(f"{ticker}: {count} datos")
+#     st.write("Información de datos por ticker:")
+#     for ticker, count in ticker_data_counts.items():
+#         st.write(f"{ticker}: {count} datos")
     
-    common_dates = set.intersection(*[set(prices[ticker].index) for ticker in tickers])
+#     common_dates = set.intersection(*[set(prices[ticker].index) for ticker in tickers])
     
-    st.write(f"Número de fechas comunes a todos los tickers: {len(common_dates)}")
+#     st.write(f"Número de fechas comunes a todos los tickers: {len(common_dates)}")
     
-    if len(common_dates) < 126:
-        raise ValueError(f"No hay suficientes fechas comunes para todos los tickers. Se necesitan al menos 126 días, pero solo hay {len(common_dates)}.")
+#     if len(common_dates) < 126:
+#         raise ValueError(f"No hay suficientes fechas comunes para todos los tickers. Se necesitan al menos 126 días, pero solo hay {len(common_dates)}.")
     
-    aligned_prices = pd.DataFrame({ticker: prices[ticker][prices[ticker].index.isin(common_dates)] for ticker in tickers})
+#     aligned_prices = pd.DataFrame({ticker: prices[ticker][prices[ticker].index.isin(common_dates)] for ticker in tickers})
     
-    st.write(f"Filas de precios después de alinear: {len(aligned_prices)}")
-    st.write(f"Primera fecha después de alinear: {aligned_prices.index.min()}")
-    st.write(f"Última fecha después de alinear: {aligned_prices.index.max()}")
+#     st.write(f"Filas de precios después de alinear: {len(aligned_prices)}")
+#     st.write(f"Primera fecha después de alinear: {aligned_prices.index.min()}")
+#     st.write(f"Última fecha después de alinear: {aligned_prices.index.max()}")
     
-    mu = expected_returns.mean_historical_return(aligned_prices)
-    S = risk_models.sample_cov(aligned_prices)
+#     mu = expected_returns.mean_historical_return(aligned_prices)
+#     S = risk_models.sample_cov(aligned_prices)
     
-    S = (S + S.T) / 2
+#     S = (S + S.T) / 2
     
-    if not np.all(np.linalg.eigvals(S) > 0):
-        S = risk_models.cov_nearest(S)
+#     if not np.all(np.linalg.eigvals(S) > 0):
+#         S = risk_models.cov_nearest(S)
     
-    ef = EfficientFrontier(mu, S)
-    weights = ef.max_sharpe()
-    cleaned_weights = ef.clean_weights()
+#     ef = EfficientFrontier(mu, S)
+#     weights = ef.max_sharpe()
+#     cleaned_weights = ef.clean_weights()
     
-    portfolio_allocation = pd.DataFrame({
-        'Ticker': cleaned_weights.keys(),
-        'Asignación Óptima (%)': [f"{weight*100:.2f}%" for weight in cleaned_weights.values()]
-    })
+#     portfolio_allocation = pd.DataFrame({
+#         'Ticker': cleaned_weights.keys(),
+#         'Asignación Óptima (%)': [f"{weight*100:.2f}%" for weight in cleaned_weights.values()]
+#     })
     
-    return portfolio_allocation
+#     return portfolio_allocation
 
 def get_earnings_date(ticker):
     try:
@@ -667,25 +667,25 @@ if uploaded_file is not None:
             else:
                 st.warning("No se pudo generar el gráfico de distribución de la cartera.")
 
-            st.subheader('Asignación Óptima de Activos')
-            try:
-                optimal_allocation = optimize_portfolio(df, results)
-                st.dataframe(optimal_allocation)
+            # st.subheader('Asignación Óptima de Activos')
+            # try:
+            #     optimal_allocation = optimize_portfolio(df, results)
+            #     st.dataframe(optimal_allocation)
                 
-                # Crear un gráfico de barras para la asignación óptima
-                fig = px.bar(optimal_allocation, x='Ticker', y='Asignación Óptima (%)',
-                            title='Asignación Óptima de Activos',
-                            labels={'Asignación Óptima (%)': 'Asignación (%)'})
-                fig.update_layout(xaxis_title='Ticker', yaxis_title='Asignación (%)')
-                st.plotly_chart(fig, use_container_width=True)
+            #     # Crear un gráfico de barras para la asignación óptima
+            #     fig = px.bar(optimal_allocation, x='Ticker', y='Asignación Óptima (%)',
+            #                 title='Asignación Óptima de Activos',
+            #                 labels={'Asignación Óptima (%)': 'Asignación (%)'})
+            #     fig.update_layout(xaxis_title='Ticker', yaxis_title='Asignación (%)')
+            #     st.plotly_chart(fig, use_container_width=True)
                 
-                st.warning("Nota: La optimización se realizó con datos alineados, lo que puede resultar en un período más corto de lo ideal. Considera esto al interpretar los resultados.")
+            #     st.warning("Nota: La optimización se realizó con datos alineados, lo que puede resultar en un período más corto de lo ideal. Considera esto al interpretar los resultados.")
                 
-            except ValueError as ve:
-                st.warning(f"Advertencia en la optimización de la cartera: {str(ve)}")
-            except Exception as e:
-                st.error(f"Error al calcular la asignación óptima de activos: {str(e)}")
-                st.error("Detalles del error:", exc_info=True)
+            # except ValueError as ve:
+            #     st.warning(f"Advertencia en la optimización de la cartera: {str(ve)}")
+            # except Exception as e:
+            #     st.error(f"Error al calcular la asignación óptima de activos: {str(e)}")
+            #     st.error("Detalles del error:", exc_info=True)
 
         with tab3:
             company_info_tab(df, results)
