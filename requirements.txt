@@ -1,14 +1,18 @@
 streamlit==1.37.0
-   pandas
-   yfinance==0.2.41
-   plotly==5.23.0
-   beautifulsoup4==4.12.3
-   frozendict==2.4.4
-   html5lib==1.1
-   lxml==5.2.2
-   multitasking==0.0.11
-   peewee==3.17.6
-   platformdirs==4.2.2
-   soupsieve==2.5
-   webencodings==0.5.1
-   pypfopt==1.5.5
+numpy==1.26.4
+pandas==2.2.2
+scipy==1.12.0
+cvxpy==1.4.2
+pypfopt==1.2.5
+streamlit==1.37.0
+yfinance==0.2.41
+plotly==5.23.0
+beautifulsoup4==4.12.3
+frozendict==2.4.4
+html5lib==1.1
+lxml==5.2.2
+multitasking==0.0.11
+peewee==3.17.6
+platformdirs==4.2.2
+soupsieve==2.5
+webencodings==0.5.1
