@@ -11,4 +11,4 @@ streamlit==1.37.0
    platformdirs==4.2.2
    soupsieve==2.5
    webencodings==0.5.1
-   pypfopt
+   pypfopt==1.5.5
