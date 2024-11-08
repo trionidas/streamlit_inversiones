@@ -173,7 +173,6 @@ def plot_performance_over_time(df):
     )
     return fig
 
-
 def get_monthly_prices(tickers, start_date, end_date):
     monthly_prices = {}
     for ticker in tickers:
@@ -188,7 +187,6 @@ def get_monthly_prices(tickers, start_date, end_date):
 
         else:
             st.write(f"No se pudieron obtener datos para {ticker}")
-
 
     df_monthly_prices = pd.DataFrame(monthly_prices)
     
@@ -210,8 +208,6 @@ def calculate_investment_value_over_time(df, results):
     # Convertir el índice a fin de mes
     monthly_prices.index = monthly_prices.index.to_period('M').to_timestamp('M')
     monthly_data.index = monthly_data.index.to_period('M').to_timestamp('M')
-    
-
     
     shares_accumulated = {}
     for ticker in tickers:
@@ -247,8 +243,6 @@ def calculate_investment_value_over_time(df, results):
                             price = price_series
                         st.write(f"Usando precio de {last_valid_price} para {ticker}")
             
-
-            
             if price is not None and shares > 0:
                 if ticker != '0P0000IKFS.F':
                     price *= exchange_rate
@@ -265,11 +259,10 @@ def calculate_investment_value_over_time(df, results):
     
     return monthly_data
 
+# Version táctil
 def plot_investment_over_time(df, results):
     monthly_data = calculate_investment_value_over_time(df, results)
    
-
-    
     # Crear el gráfico
     fig = go.Figure()
     
@@ -296,56 +289,6 @@ def plot_investment_over_time(df, results):
 
 import numpy as np
 
-import numpy as np
-
-# def optimize_portfolio(df, results, exclude_ticker='0P0000IKFS.F'):
-#     tickers = [ticker for ticker in df['TICKER'].unique() if ticker != exclude_ticker]
-#     start_date = df['FECHA'].min()
-#     end_date = datetime.now()
-    
-#     prices = {}
-#     ticker_data_counts = {}
-#     for ticker in tickers:
-#         hist = get_historical_data(ticker, start_date, end_date)
-#         hist.index = hist.index.normalize()
-#         prices[ticker] = hist['Close']
-#         ticker_data_counts[ticker] = hist['Close'].count()
-    
-#     st.write("Información de datos por ticker:")
-#     for ticker, count in ticker_data_counts.items():
-#         st.write(f"{ticker}: {count} datos")
-    
-#     common_dates = set.intersection(*[set(prices[ticker].index) for ticker in tickers])
-    
-#     st.write(f"Número de fechas comunes a todos los tickers: {len(common_dates)}")
-    
-#     if len(common_dates) < 126:
-#         raise ValueError(f"No hay suficientes fechas comunes para todos los tickers. Se necesitan al menos 126 días, pero solo hay {len(common_dates)}.")
-    
-#     aligned_prices = pd.DataFrame({ticker: prices[ticker][prices[ticker].index.isin(common_dates)] for ticker in tickers})
-    
-#     st.write(f"Filas de precios después de alinear: {len(aligned_prices)}")
-#     st.write(f"Primera fecha después de alinear: {aligned_prices.index.min()}")
-#     st.write(f"Última fecha después de alinear: {aligned_prices.index.max()}")
-    
-#     mu = expected_returns.mean_historical_return(aligned_prices)
-#     S = risk_models.sample_cov(aligned_prices)
-    
-#     S = (S + S.T) / 2
-    
-#     if not np.all(np.linalg.eigvals(S) > 0):
-#         S = risk_models.cov_nearest(S)
-    
-#     ef = EfficientFrontier(mu, S)
-#     weights = ef.max_sharpe()
-#     cleaned_weights = ef.clean_weights()
-    
-#     portfolio_allocation = pd.DataFrame({
-#         'Ticker': cleaned_weights.keys(),
-#         'Asignación Óptima (%)': [f"{weight*100:.2f}%" for weight in cleaned_weights.values()]
-#     })
-    
-#     return portfolio_allocation
 
 def get_earnings_date(ticker):
     try:
@@ -415,38 +358,7 @@ def analizar_sp500():
     return contador, recomendacion, df_analysis
 
 
-def company_info_tab(df, results):
-    st.subheader('Información de Empresas')
-    
-    company_data = []
-    for ticker in df['TICKER'].unique():
-        ticker_df = df[df['TICKER'] == ticker]
-        first_purchase_date = ticker_df['FECHA'].min()
-        
-        earnings_date = get_earnings_date(ticker)
-        splits = get_stock_splits(ticker, first_purchase_date)
-        
-        split_details = []
-        if not splits.empty:
-            for date, ratio in splits.items():
-                split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
-        
-        dividends = ticker_df[ticker_df['TIPO_OP'] == 'Dividendo']
-        total_dividends = dividends['PRECIO_OPERACION_EUR'].sum()
-        
-        company_data.append({
-            'Ticker': ticker,
-            'Próxima presentación de resultados': earnings_date,
-            'Splits desde la primera compra': len(splits),
-            'Detalles de splits': ', '.join(split_details) if split_details else 'Ninguno',
-            'Total Dividendos (EUR)': total_dividends
-        })
-    
-    company_info_df = pd.DataFrame(company_data)
-    st.dataframe(company_info_df.style.format({
-        'Splits desde la primera compra': '{:d}',
-        'Total Dividendos (EUR)': '{:.2f}'
-    }))
+
     
 
 def analizar_sp500():
@@ -480,13 +392,64 @@ def analizar_sp500():
 
 
 def company_info_tab(df, results):
-    st.subheader('Información de Empresas')
+    st.subheader('Análisis del S&P 500')
+    resultado, recomendacion, df_analysis = analizar_sp500()
     
+    # Color del resultado
+    resultado_color = "green" if resultado > 0 else "red"
+    resultado_html = f'<span style="color:{resultado_color}; font-size: 2em;">{resultado}</span>'
+    
+    # Color de la recomendación en azul
+    recomendacion_html = f'<span style="color:blue; font-size: 2em;">{recomendacion}</span>'
+    
+    # Mostrar resultado y recomendación con HTML
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(f"**Resultado del análisis**")
+        st.markdown(resultado_html, unsafe_allow_html=True)
+    with col2:
+        st.markdown(f"**Recomendación**")
+        st.markdown(recomendacion_html, unsafe_allow_html=True)
+    
+   
+    # Formatear la fecha para el gráfico
+    df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
+    
+    # Gráfico de líneas con Plotly
+    fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
+                  labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
+                  title='S&P 500 - Últimos 13 meses')
+    fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
+    st.plotly_chart(fig)
+    
+    # Tabla mejorada para visualizar datos de precios
+    df_display = df_analysis.copy()
+    df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
+    df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
+    
+    # Agregar flechas con color en HTML
+    df_display['Cambio'] = df_display['Cambio'].map({
+        1: '<span style="color:green;">⬆</span>', 
+        -1: '<span style="color:red;">⬇</span>', 
+        0: '→'
+    })
+    
+    # Reordenar columnas y presentar la tabla con HTML renderizado
+    df_display = df_display[['Fecha', 'Precio de Cierre', 'Cambio']]
+    st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+    st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
+
+    # Información de empresas con formato visual mejorado
+    st.subheader('Información de Empresas')
     company_data = []
     for ticker in df['TICKER'].unique():
+        # Excluir el ticker "NVDA"
+        if ticker == "0P0000IKFS.F":
+            continue
+
         ticker_df = df[df['TICKER'] == ticker]
         first_purchase_date = ticker_df['FECHA'].min()
-        
         earnings_date = get_earnings_date(ticker)
         splits = get_stock_splits(ticker, first_purchase_date)
         
@@ -495,61 +458,31 @@ def company_info_tab(df, results):
             for date, ratio in splits.items():
                 split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
         
-        dividends = ticker_df[ticker_df['TIPO_OP'] == 'Dividendo']
-        total_dividends = dividends['PRECIO_OPERACION_EUR'].sum()
-        
         company_data.append({
             'Ticker': ticker,
-            'Próxima presentación de resultados': earnings_date,
-            'Splits desde la primera compra': len(splits),
-            'Detalles de splits': ', '.join(split_details) if split_details else 'Ninguno',
-            'Total Dividendos (EUR)': total_dividends
+            'Resultados': earnings_date,
+            'Nº splits': len(splits),
+            'Info splits': ', '.join(split_details) if split_details else 'Ninguno',
         })
-    
+
     company_info_df = pd.DataFrame(company_data)
-    st.dataframe(company_info_df.style.format({
-        'Splits desde la primera compra': '{:d}',
-        'Total Dividendos (EUR)': '{:.2f}'
-    }))
+
+    # Ordenar por 'Próxima presentación de resultados' en orden ascendente
+    company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
+
+    # Dar formato a la columna 'Ticker' para que sea azul
+    company_info_df['Ticker'] = company_info_df['Ticker'].apply(lambda x: f'<span style="color:blue;">{x}</span>')
+
+    # Ajustar la alineación de la columna 'Detalles de splits' a la izquierda
+    styled_table = company_info_df.style.format({
+        'Ticker': lambda x: f'<span style="color:blue;">{x}</span>'
+    }).set_properties(subset=['Info splits'], **{'text-align': 'left'})
+
+    # Mostrar la tabla en Streamlit usando HTML
+    st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
     
-    st.subheader('Análisis del S&P 500')
-    resultado, recomendacion, df_analysis = analizar_sp500()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Resultado del análisis", resultado)
-    with col2:
-        st.metric("Recomendación", recomendacion)
-    
-    st.subheader('Precios de cierre mensuales del S&P 500 (últimos 13 meses)')
-    
-    # Crear una nueva columna con el formato de fecha deseado
-    df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
-    
-    # Crear el gráfico con Plotly Express
-    fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
-                  labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
-                  title='S&P 500 - Últimos 13 meses')
-    fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
-    
-    # Mostrar el gráfico
-    st.plotly_chart(fig)
-    
-    # Formatear el DataFrame para la presentación en la tabla
-    df_display = df_analysis.copy()
-    df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
-    df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
-    df_display['Cambio'] = df_display['Cambio'].map({1: '+1', -1: '-1', 0: '0'})
-    
-    # Añadir una columna que indique si es el mes base
-    df_display['Mes Base'] = ['Sí' if i == 0 else 'No' for i in range(len(df_display))]
-    
-    # Reordenar las columnas para que 'Mes Base' aparezca después de 'Fecha'
-    df_display = df_display[['Fecha',  'Precio de Cierre', 'Cambio']]
-    
-    st.table(df_display)
-    
-    st.info("Nota: El 'Mes Base' es el punto de partida para la comparación. Los cambios se calculan respecto al mes anterior, empezando desde el segundo mes.")
+
 st.set_page_config(layout="wide")
 st.title('Análisis de Inversiones')
 
@@ -565,70 +498,130 @@ if uploaded_file is not None:
 
         with tab1:
             st.subheader('Resumen Total de la Cartera')
-            
+
             results = analyze_investments(df)
-            
+
+            # Cálculos de resumen total
             total_invested = results['Total Invertido (EUR)'].sum()
-            total_current_value = results['Valor Actual (EUR)'].sum(skipna=True)
+            total_current_value = results['Valor Actual (EUR)'].sum()
             total_dividends = results['Dividendos Recibidos (EUR)'].sum()
-            total_profit_loss = total_current_value - total_invested + total_dividends if pd.notnull(total_current_value) else None
-            total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if pd.notnull(total_profit_loss) and total_invested != 0 else None
+            total_profit_loss = total_current_value - total_invested + total_dividends
+            total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Capital Invertido", f"{total_invested:,.2f} €", delta=None)
-            col2.metric("Valor Actual", f"{total_current_value:,.2f} €" if pd.notnull(total_current_value) else "N/A", 
-                        delta=f"{total_profit_loss:+,.2f} €" if pd.notnull(total_profit_loss) else None)
-            col3.metric("Dividendos Recibidos", f"{total_dividends:,.2f} €", delta=None)
-            
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-            
-            col4, col5 = st.columns(2)
-            
-            if total_profit_loss is not None:
-                color = "green" if total_profit_loss > 0 else "red"
-                col4.metric("Rendimiento Absoluto", f"{total_profit_loss:+,.2f} €", delta=None)
-            else:
-                col4.metric("Rendimiento Absoluto", "N/A", delta=None)
-            
-            if total_profit_loss_percentage is not None:
-                color = "green" if total_profit_loss_percentage > 0 else "red"
-                col5.metric("Rendimiento Porcentual", f"{total_profit_loss_percentage:+.2f}%", delta=None)
-            else:
-                col5.metric("Rendimiento Porcentual", "N/A", delta=None)
+            # Mostrar resumen con tamaño de fuente más grande, justificado a la izquierda
+            st.markdown(f"""
+                <div style='text-align: left; font-size: 28px;'>
+                    <p><strong>💰 Capital Invertido:</strong> {total_invested:,.2f} €</p>
+                    <p><strong>📈 Valor Actual:</strong> {total_current_value:,.2f} € <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>({total_profit_loss:+,.2f} €)</span></p>
+                    <p><strong>💸 Dividendos Recibidos:</strong> {total_dividends:,.2f} €</p>
+                    <p><strong>📊 Rendimiento Absoluto:</strong> <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>{total_profit_loss:+,.2f} €</span></p>
+                    <p><strong>📈 Rendimiento Porcentual:</strong> <span style='color:{"green" if total_profit_loss_percentage >= 0 else "red"};'>{total_profit_loss_percentage:+.2f}%</span></p>
+                </div>
+            """, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
-            exchange_rate = get_exchange_rate()
-            st.info(f"Tipo de cambio utilizado: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
 
-            st.subheader('Detalle de Inversiones')
-            
-            # Opciones de ordenación y agrupación
-            sort_options = list(results.columns)
-            sort_by = st.selectbox('Ordenar por:', sort_options)
-            ascending = st.checkbox('Orden ascendente', value=False)
-            
-            # Aplicar ordenación
-            sorted_results = results.sort_values(by=sort_by, ascending=ascending)
-            
-            # Mostrar tabla ordenada
-            st.dataframe(sorted_results.style.format({
-                'Total Invertido (EUR)': '{:,.2f}',
-                'Precio Promedio (EUR)': '{:,.2f}',
-                'Precio Actual (EUR)': '{:,.2f}',
-                'Valor Actual (EUR)': '{:,.2f}',
-                'Dividendos Recibidos (EUR)': '{:,.2f}',
-                'Ganancia/Pérdida (EUR)': '{:+,.2f}',
-                'Ganancia/Pérdida %': '{:+.2f}%',
-                'Splits': '{:.0f}'
-            }).bar(subset=['Valor Actual (EUR)'], color='#5fba7d'))
+            st.subheader('Detalle de Inversiones por Ticker')
 
+            # Crear el DataFrame con detalles de inversión por ticker
+            data = []
+            for ticker in results['Ticker'].unique():
+                ticker_results = results[results['Ticker'] == ticker]
+                ticker_invested = ticker_results['Total Invertido (EUR)'].values[0]
+                ticker_current_value = ticker_results['Valor Actual (EUR)'].values[0]
+                ticker_profit_loss = ticker_current_value - ticker_invested
+                ticker_profit_loss_percentage = (ticker_profit_loss / ticker_invested) * 100 if ticker_invested != 0 else 0
+
+                data.append({
+                    'Ticker': ticker,
+                    'Capital Invertido': ticker_invested,
+                    'Valor Actual': ticker_current_value,
+                    'Ganancia/Pérdida': ticker_profit_loss,
+                    'Ganancia/Pérdida %': ticker_profit_loss_percentage
+                })
+
+            ticker_details_df = pd.DataFrame(data)
+            ticker_details_df = ticker_details_df.sort_values('Ganancia/Pérdida %', ascending=False)
+
+            # Visualización compacta para cada ticker
+            for index, row in ticker_details_df.iterrows():
+                col1, col2, col3, col4 = st.columns([1, 2, 2, 2])
+                
+                # Mostrar Ticker en negrita y azul
+                with col1:
+                    st.markdown(f"**<span style='color:blue'>{row['Ticker']}</span>**", unsafe_allow_html=True)
+                
+                # Mostrar Capital Invertido
+                with col2:
+                    st.markdown(f"💰 {row['Capital Invertido']:,.2f} €")
+                
+                # Mostrar Valor Actual
+                with col3:
+                    st.markdown(f"📈 {row['Valor Actual']:,.2f} €")
+                
+                # Mostrar Ganancia/Pérdida con color según positivo/negativo
+                profit_loss_color = "green" if row['Ganancia/Pérdida'] >= 0 else "red"
+                with col4:
+                    st.markdown(
+                        f"<span style='color:{profit_loss_color}'>🔼 {row['Ganancia/Pérdida']:+,.2f} € ({row['Ganancia/Pérdida %']:+.2f}%)</span>", 
+                        unsafe_allow_html=True
+                    )
+                
+                # Línea divisoria entre tickers
+                st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             st.subheader('Datos Cargados')
-            st.dataframe(df)
+
+            # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
+            df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
+            df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
+            df_to_display.reset_index(drop=True, inplace=True)
+
+            # Aplicar estilo al DataFrame y solo formatear celdas numéricas
+            styled_html = df_to_display.style.format({
+                'FECHA': lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x,
+                'VOLUMEN': lambda x: "{:.2f}".format(x) if isinstance(x, (int, float)) else x,
+                'PRECIO_ACCION': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x,
+                'PRECIO_OPERACION_EUR': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x
+            }).applymap(lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else 'color: red; font-weight: bold;', subset=['TIPO_OP']) \
+            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) else '', subset=['TICKER']) \
+            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) and x.startswith("TRANSFERENCIA") else '', subset=['COMENTARIO']).to_html(index=False)
+
+            # Mostrar el DataFrame estilizado como HTML en Streamlit
+            st.markdown(styled_html, unsafe_allow_html=True)
+
+
 
         with tab2:
+
+            # En la Tab 2
+
+            st.subheader('Distribución de la Cartera')
+            portfolio_distribution_fig = plot_portfolio_distribution(results)
+            if portfolio_distribution_fig is not None:
+                st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
+            else:
+                st.warning("No se pudo generar el gráfico de distribución de la cartera.")
+
+            st.subheader('Evolución de la Inversión')  
+              
+            try:
+                # Calcular los datos de inversión a lo largo del tiempo
+                monthly_data = calculate_investment_value_over_time(df, results)
+                                
+                # Crear y mostrar el gráfico
+                investment_over_time_fig = plot_investment_over_time(df, results)
+                st.plotly_chart(investment_over_time_fig, use_container_width=True)
+                
+            except Exception as e:
+                st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
+                
+        
             st.subheader('Rendimiento de Ticker Específico')
 
             # Selector de ticker
@@ -646,46 +639,6 @@ if uploaded_file is not None:
             else:
                 st.info("Selecciona un ticker para ver su rendimiento.")
 
-            st.subheader('Evolución de la Inversión')  
-              
-            try:
-                # Calcular los datos de inversión a lo largo del tiempo
-                monthly_data = calculate_investment_value_over_time(df, results)
-                                
-                # Crear y mostrar el gráfico
-                investment_over_time_fig = plot_investment_over_time(df, results)
-                st.plotly_chart(investment_over_time_fig, use_container_width=True)
-                
-            except Exception as e:
-                st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
-                
-                
-            st.subheader('Distribución de la Cartera')
-            portfolio_distribution_fig = plot_portfolio_distribution(results)
-            if portfolio_distribution_fig is not None:
-                st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
-            else:
-                st.warning("No se pudo generar el gráfico de distribución de la cartera.")
-
-            # st.subheader('Asignación Óptima de Activos')
-            # try:
-            #     optimal_allocation = optimize_portfolio(df, results)
-            #     st.dataframe(optimal_allocation)
-                
-            #     # Crear un gráfico de barras para la asignación óptima
-            #     fig = px.bar(optimal_allocation, x='Ticker', y='Asignación Óptima (%)',
-            #                 title='Asignación Óptima de Activos',
-            #                 labels={'Asignación Óptima (%)': 'Asignación (%)'})
-            #     fig.update_layout(xaxis_title='Ticker', yaxis_title='Asignación (%)')
-            #     st.plotly_chart(fig, use_container_width=True)
-                
-            #     st.warning("Nota: La optimización se realizó con datos alineados, lo que puede resultar en un período más corto de lo ideal. Considera esto al interpretar los resultados.")
-                
-            # except ValueError as ve:
-            #     st.warning(f"Advertencia en la optimización de la cartera: {str(ve)}")
-            # except Exception as e:
-            #     st.error(f"Error al calcular la asignación óptima de activos: {str(e)}")
-            #     st.error("Detalles del error:", exc_info=True)
 
         with tab3:
             company_info_tab(df, results)
