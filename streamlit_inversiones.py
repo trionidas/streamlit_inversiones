@@ -465,7 +465,7 @@ if not st.session_state.file_uploaded:
     if uploaded_file is not None:
         st.session_state.uploaded_file = uploaded_file
         st.session_state.file_uploaded = True
-        st.experimental_rerun()
+        st.experimental_set_query_params()
 
 
 # Procesar el archivo si está en el estado de la sesión
@@ -771,4 +771,4 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.session_state.file_uploaded = False
             if hasattr(st.session_state, 'uploaded_file'):
                 del st.session_state.uploaded_file
-            st.experimental_rerun()
+            st.experimental_set_query_params()
