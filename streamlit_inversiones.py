@@ -133,13 +133,37 @@ def analyze_investments(df):
 
 def plot_portfolio_distribution(results):
     fig = px.pie(
-        results, 
-        values='Valor Actual (EUR)', 
-        names='Ticker', 
+        results,
+        values='Valor Actual (EUR)',
+        names='Ticker',
         title='Distribución de la Cartera por Valor Actual',
-        color_discrete_sequence=px.colors.qualitative.Set3
+        color_discrete_sequence=px.colors.sequential.Blues_r  # Colores en tonos de azul suave
     )
-    fig.update_traces(textposition='inside', textinfo='percent+label')
+    
+    # Ajustes de estilo para el gráfico
+    fig.update_traces(
+        textposition='inside',  # Etiquetas dentro de cada sección
+        textinfo='percent+label',  # Mostrar etiquetas y porcentaje
+        pull=[0.05 if v > results['Valor Actual (EUR)'].sum() * 0.1 else 0 for v in results['Valor Actual (EUR)']]  # Resaltar secciones mayores al 10%
+    )
+    
+    # Configuración de diseño
+    fig.update_layout(
+        showlegend=True,
+        legend=dict(
+            title='Ticker',
+            orientation="h",
+            yanchor="bottom",
+            y=-0.3,
+            xanchor="center",
+            x=0.5
+        ),
+        margin=dict(t=40, b=40, l=0, r=0),
+        paper_bgcolor='white',  # Fondo blanco para todo el gráfico
+        plot_bgcolor='white',
+        title_font=dict(size=24, color='#4a90e2', family='Arial'),  # Estilo del título
+    )
+    
     return fig
 
 @st.cache_data(ttl=3600)
@@ -357,10 +381,6 @@ def analizar_sp500():
     recomendacion = "QUEDATE EN FONDO" if contador > 0 else "SALTA A BONOS"
     return contador, recomendacion, df_analysis
 
-
-
-    
-
 def analizar_sp500():
     sp500 = yf.Ticker("^GSPC")
     end_date = datetime.now()
@@ -390,107 +410,69 @@ def analizar_sp500():
     recomendacion = "QUEDATE EN FONDO" if contador > 0 else "SALTA A BONOS"
     return contador, recomendacion, df_analysis
 
+# Configuración de la página
+st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
 
-def company_info_tab(df, results):
-    st.subheader('Análisis del S&P 500')
-    resultado, recomendacion, df_analysis = analizar_sp500()
-    
-    # Color del resultado
-    resultado_color = "green" if resultado > 0 else "red"
-    resultado_html = f'<span style="color:{resultado_color}; font-size: 2em;">{resultado}</span>'
-    
-    # Color de la recomendación en azul
-    recomendacion_html = f'<span style="color:blue; font-size: 2em;">{recomendacion}</span>'
-    
-    # Mostrar resultado y recomendación con HTML
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"**Resultado del análisis**")
-        st.markdown(resultado_html, unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"**Recomendación**")
-        st.markdown(recomendacion_html, unsafe_allow_html=True)
-    
-   
-    # Formatear la fecha para el gráfico
-    df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
-    
-    # Gráfico de líneas con Plotly
-    fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
-                  labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
-                  title='S&P 500 - Últimos 13 meses')
-    fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
-    st.plotly_chart(fig)
-    
-    # Tabla mejorada para visualizar datos de precios
-    df_display = df_analysis.copy()
-    df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
-    df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
-    
-    # Agregar flechas con color en HTML
-    df_display['Cambio'] = df_display['Cambio'].map({
-        1: '<span style="color:green;">⬆</span>', 
-        -1: '<span style="color:red;">⬇</span>', 
-        0: '→'
-    })
-    
-    # Reordenar columnas y presentar la tabla con HTML renderizado
-    df_display = df_display[['Fecha', 'Precio de Cierre', 'Cambio']]
-    st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+# Obtener la fecha actual en formato deseado (por ejemplo, "10 de noviembre de 2024")
+fecha_actual = datetime.now().strftime("%d de %B de %Y")
 
-    st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
+# CSS personalizado para el título de la página con un diseño más elegante y compacto
+st.markdown(f"""
+    <style>
+        .title-container {{
+            background-color: #4a90e2; /* Azul menos intenso */
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 15px;
+            box-shadow: 1px 1px 8px rgba(0, 0, 0, 0.1);
+        }}
+        .title-text {{
+            color: white; /* Texto en blanco */
+            font-size: 2em;
+            font-weight: bold;
+            font-family: 'Arial', sans-serif;
+        }}
+        .subtitle-text {{
+            color: #d1d5db; /* Color gris claro para el subtítulo */
+            font-size: 1em;
+            font-family: 'Arial', sans-serif;
+            margin-top: 3px;
+        }}
+        .date-text {{
+            color: #ffd700; /* Dorado para la fecha */
+            font-weight: bold;
+        }}
+    </style>
+""", unsafe_allow_html=True)
 
-    # Información de empresas con formato visual mejorado
-    st.subheader('Información de Empresas')
-    company_data = []
-    for ticker in df['TICKER'].unique():
-        # Excluir el ticker "NVDA"
-        if ticker == "0P0000IKFS.F":
-            continue
+# Mostrar el título estilizado con la fecha actual en otro color
+st.markdown(f"""
+    <div class="title-container">
+        <div class="title-text">Análisis de Inversiones</div>
+        <div class="subtitle-text">Datos actualizados a <span class="date-text">{fecha_actual}</span></div>
+    </div>
+""", unsafe_allow_html=True)
 
-        ticker_df = df[df['TICKER'] == ticker]
-        first_purchase_date = ticker_df['FECHA'].min()
-        earnings_date = get_earnings_date(ticker)
-        splits = get_stock_splits(ticker, first_purchase_date)
-        
-        split_details = []
-        if not splits.empty:
-            for date, ratio in splits.items():
-                split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
-        
-        company_data.append({
-            'Ticker': ticker,
-            'Resultados': earnings_date,
-            'Nº splits': len(splits),
-            'Info splits': ', '.join(split_details) if split_details else 'Ninguno',
-        })
 
-    company_info_df = pd.DataFrame(company_data)
+# Inicializar el estado de la sesión si es necesario
+if 'file_uploaded' not in st.session_state:
+    st.session_state.file_uploaded = False
 
-    # Ordenar por 'Próxima presentación de resultados' en orden ascendente
-    company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
+# Mostrar el cargador solo si no se ha cargado un archivo
+if not st.session_state.file_uploaded:
+    uploaded_file = st.file_uploader("Sube tu archivo CSV", type="csv")
+    if uploaded_file is not None:
+        st.session_state.uploaded_file = uploaded_file
+        st.session_state.file_uploaded = True
+        st.experimental_rerun()
 
-    # Dar formato a la columna 'Ticker' para que sea azul
-    company_info_df['Ticker'] = company_info_df['Ticker'].apply(lambda x: f'<span style="color:blue;">{x}</span>')
 
-    # Ajustar la alineación de la columna 'Detalles de splits' a la izquierda
-    styled_table = company_info_df.style.format({
-        'Ticker': lambda x: f'<span style="color:blue;">{x}</span>'
-    }).set_properties(subset=['Info splits'], **{'text-align': 'left'})
-
-    # Mostrar la tabla en Streamlit usando HTML
-    st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
-    
-    
-
-st.set_page_config(layout="wide")
-st.title('Análisis de Inversiones')
-
-uploaded_file = st.file_uploader("Sube tu archivo CSV", type="csv")
-
-if uploaded_file is not None:
+# Procesar el archivo si está en el estado de la sesión
+if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file'):
     try:
-        df = load_data(uploaded_file)
+        # Cargar los datos del archivo CSV
+        df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         
         tab1, tab2, tab3 = st.tabs(["Resumen", "Visualizaciones", "Información de Empresas"])
@@ -501,6 +483,17 @@ if uploaded_file is not None:
 
             results = analyze_investments(df)
 
+            # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
+            st.markdown("""
+                <style>
+                    .resumen-cartera p {
+                        font-size: 20px !important;
+                        line-height: 1.5;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
+
             # Cálculos de resumen total
             total_invested = results['Total Invertido (EUR)'].sum()
             total_current_value = results['Valor Actual (EUR)'].sum()
@@ -508,20 +501,29 @@ if uploaded_file is not None:
             total_profit_loss = total_current_value - total_invested + total_dividends
             total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
 
-            # Mostrar resumen con tamaño de fuente más grande, justificado a la izquierda
+            # Mostrar resumen con tamaño de fuente más grande
             st.markdown(f"""
-                <div style='text-align: left; font-size: 28px;'>
+                <div class='resumen-cartera' style='text-align: left;'>
                     <p><strong>💰 Capital Invertido:</strong> {total_invested:,.2f} €</p>
-                    <p><strong>📈 Valor Actual:</strong> {total_current_value:,.2f} € <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>({total_profit_loss:+,.2f} €)</span></p>
+                    <p><strong>📈 Valor Actual:</strong> {total_current_value:,.2f} € 
+                        <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>({total_profit_loss:+,.2f} €)</span>
+                    </p>
                     <p><strong>💸 Dividendos Recibidos:</strong> {total_dividends:,.2f} €</p>
-                    <p><strong>📊 Rendimiento Absoluto:</strong> <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>{total_profit_loss:+,.2f} €</span></p>
-                    <p><strong>📈 Rendimiento Porcentual:</strong> <span style='color:{"green" if total_profit_loss_percentage >= 0 else "red"};'>{total_profit_loss_percentage:+.2f}%</span></p>
+                    <p><strong>📊 Rendimiento Absoluto:</strong> 
+                        <span style='color:{"green" if total_profit_loss >= 0 else "red"};'>{total_profit_loss:+,.2f} €</span>
+                    </p>
+                    <p><strong>📈 Rendimiento Porcentual:</strong> 
+                        <span style='color:{"green" if total_profit_loss_percentage >= 0 else "red"};'>{total_profit_loss_percentage:+.2f}%</span>
+                    </p>
                 </div>
             """, unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
+
+            exchange_rate = get_exchange_rate()
+            st.info(f"Tipo de cambio utilizado: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
+
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             st.subheader('Detalle de Inversiones por Ticker')
 
@@ -639,9 +641,134 @@ if uploaded_file is not None:
             else:
                 st.info("Selecciona un ticker para ver su rendimiento.")
 
-
         with tab3:
-            company_info_tab(df, results)
+            # CSS personalizado para una apariencia de tarjeta profesional
+            st.markdown("""
+                <style>
+                    .info-card {
+                        background-color: #eef2f7; 
+                        padding: 20px; 
+                        border-radius: 10px; 
+                        margin-bottom: 20px; 
+                        box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.1);
+                    }
+                    .info-card h3 {
+                        color: #0033A0; 
+                        font-size: 20px; 
+                        margin-bottom: 10px;
+                    }
+                    .info-card p {
+                        color: #333333; 
+                        font-size: 16px;
+                    }
+                    .recommendation {
+                        color: #006400; /* Verde para recomendación */
+                        font-weight: bold;
+                    }
+                    .result {
+                        font-size: 2em;
+                        color: #333333;
+                        font-weight: bold;
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+
+            # Título de la sección
+            st.subheader('Análisis del S&P 500')
+
+            # Resultado y recomendación del análisis
+            resultado, recomendacion, df_analysis = analizar_sp500()
+            
+            # Color del resultado
+            resultado_color = "green" if resultado > 0 else "red"
+            resultado_html = f'<span style="color:{resultado_color}; font-size: 1.5em;">{resultado}</span>'
+            
+            # Mostrar análisis y recomendación en una tarjeta compacta
+            st.markdown(f"""
+                <div class='info-card'>
+                    <h3>Resultado del Análisis y Recomendación</h3>
+                    <p class='result'>Resultado: {resultado_html}</p>
+                    <p class='recommendation'>Recomendación: {recomendacion}</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Formatear la fecha para el gráfico
+            df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
+            
+            # Gráfico de líneas con Plotly
+            fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
+                        labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
+                        title='S&P 500 - Últimos 13 meses')
+            fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
+            st.plotly_chart(fig)
+            
+            # Tabla mejorada para visualizar datos de precios
+            df_display = df_analysis.copy()
+            df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
+            df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
+            
+            # Agregar flechas con color en HTML
+            df_display['Cambio'] = df_display['Cambio'].map({
+                1: '<span style="color:green;">⬆</span>', 
+                -1: '<span style="color:red;">⬇</span>', 
+                0: '→'
+            })
+            
+            # Reordenar columnas y presentar la tabla con HTML renderizado
+            df_display = df_display[['Fecha', 'Precio de Cierre', 'Cambio']]
+            st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
+
+            # Información de empresas con formato visual mejorado
+            st.subheader('Información de Empresas')
+            company_data = []
+            for ticker in df['TICKER'].unique():
+                # Excluir el ticker "NVDA"
+                if ticker == "0P0000IKFS.F":
+                    continue
+
+                ticker_df = df[df['TICKER'] == ticker]
+                first_purchase_date = ticker_df['FECHA'].min()
+                earnings_date = get_earnings_date(ticker)
+                splits = get_stock_splits(ticker, first_purchase_date)
+                
+                split_details = []
+                if not splits.empty:
+                    for date, ratio in splits.items():
+                        split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
+                
+                company_data.append({
+                    'Ticker': ticker,
+                    'Resultados': earnings_date,
+                    'Nº splits': len(splits),
+                    'Info splits': ', '.join(split_details) if split_details else 'Ninguno',
+                })
+
+            company_info_df = pd.DataFrame(company_data)
+
+            # Ordenar por 'Próxima presentación de resultados' en orden ascendente
+            company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
+
+            # Dar formato a la columna 'Ticker' para que sea azul
+            company_info_df['Ticker'] = company_info_df['Ticker'].apply(lambda x: f'<span style="color:blue;">{x}</span>')
+
+            # Ajustar la alineación de la columna 'Detalles de splits' a la izquierda
+            styled_table = company_info_df.style.format({
+                'Ticker': lambda x: f'<span style="color:blue;">{x}</span>'
+            }).set_properties(subset=['Info splits'], **{'text-align': 'left'})
+
+            # Mostrar la tabla en Streamlit usando HTML
+            st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+    
+
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {str(e)}")
+        # Opción para reiniciar
+        if st.button("Cargar un archivo diferente"):
+            st.session_state.file_uploaded = False
+            if hasattr(st.session_state, 'uploaded_file'):
+                del st.session_state.uploaded_file
+            st.experimental_rerun()
