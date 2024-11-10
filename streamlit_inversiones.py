@@ -526,6 +526,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             st.subheader('Detalle de Inversiones por Ticker')
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             # Crear el DataFrame con detalles de inversión por ticker
             data = []
@@ -578,6 +579,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             st.subheader('Datos Cargados')
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
             df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
@@ -760,8 +762,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             # Mostrar la tabla en Streamlit usando HTML
             st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-    
 
 
     except Exception as e:
