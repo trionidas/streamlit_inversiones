@@ -455,17 +455,17 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-# Inicializar el estado de la sesión si es necesario
-if 'file_uploaded' not in st.session_state:
+# Initialize session state variables if they don't exist
+if "file_uploaded" not in st.session_state:
     st.session_state.file_uploaded = False
+    st.session_state.uploaded_file = None
 
-# Mostrar el cargador solo si no se ha cargado un archivo
+# Show the file uploader only if no file has been uploaded yet
 if not st.session_state.file_uploaded:
     uploaded_file = st.file_uploader("Sube tu archivo CSV", type="csv")
     if uploaded_file is not None:
         st.session_state.uploaded_file = uploaded_file
         st.session_state.file_uploaded = True
-        st.experimental_set_query_params()
 
 
 # Procesar el archivo si está en el estado de la sesión
@@ -766,9 +766,9 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {str(e)}")
-        # Opción para reiniciar
+        # Option to load a different file
         if st.button("Cargar un archivo diferente"):
             st.session_state.file_uploaded = False
-            if hasattr(st.session_state, 'uploaded_file'):
+            if 'uploaded_file' in st.session_state:
                 del st.session_state.uploaded_file
-            st.experimental_set_query_params()
+            # No need to call st.experimental_rerun(); Streamlit will rerun when the button is clicked
