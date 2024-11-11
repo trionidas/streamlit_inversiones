@@ -378,7 +378,7 @@ def analizar_sp500():
         'Cambio': cambios
     })
     
-    recomendacion = "QUEDATE EN FONDO" if contador > 0 else "SALTA A BONOS"
+    recomendacion = "Quédate en Fondo" if contador > 0 else "Salta a Bonos"
     return contador, recomendacion, df_analysis
 
 def analizar_sp500():
@@ -407,7 +407,7 @@ def analizar_sp500():
         'Cambio': [0] + cambios  # Añadimos un 0 al principio para el primer mes
     })
     
-    recomendacion = "QUEDATE EN FONDO" if contador > 0 else "SALTA A BONOS"
+    recomendacion = "Quédate en el Fondo" if contador > 0 else "Cambia a Bonobos"
     return contador, recomendacion, df_analysis
 
 
@@ -476,9 +476,38 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-
-
-
+# Global CSS styling at the start of the app (outside tabs)
+st.markdown("""
+    <style>
+        .info-card {
+            background-color: #eef2f7; 
+            padding: 10px; 
+            border-radius: 10px; 
+            margin-bottom: 10px; 
+            box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.1);
+        }
+        .info-card h3 {
+            color: #0033A0; 
+            font-size: 20px; 
+            margin-bottom: 5px; /* Reduced bottom margin */
+        }
+        .info-card p {
+            color: #333333; 
+            font-size: 16px;
+            margin-top: 0px; /* Remove top margin */
+            margin-bottom: 0px; /* Remove bottom margin */
+        }
+        .recommendation {
+            color: #006400; /* Green color for recommendation */
+            font-weight: bold;
+        }
+        .result {
+            font-size: 1.5em; /* Adjusted font size */
+            color: #333333;
+            font-weight: bold;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
@@ -500,8 +529,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
         df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         
-        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Visualizaciones", "Información de Empresas", "Datos Cargados"])
-
+        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Visualizaciones", "Análisis SP500", "Datos Cargados"])
 
         with tab1:
             
@@ -601,15 +629,12 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                 # Línea divisoria entre tickers
                 st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
         with tab2:
 
-            # En la Tab 2
-
-            
+            # En la Tab 2            
             styled_subheader('Distribución de la Cartera')
+
             portfolio_distribution_fig = plot_portfolio_distribution(results)
             if portfolio_distribution_fig is not None:
                 st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
@@ -649,36 +674,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                 st.info("Selecciona un ticker para ver su rendimiento.")
 
         with tab3:
-            # CSS personalizado para una apariencia de tarjeta profesional
-            st.markdown("""
-                <style>
-                    .info-card {
-                        background-color: #eef2f7; 
-                        padding: 20px; 
-                        border-radius: 10px; 
-                        margin-bottom: 20px; 
-                        box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.1);
-                    }
-                    .info-card h3 {
-                        color: #0033A0; 
-                        font-size: 20px; 
-                        margin-bottom: 10px;
-                    }
-                    .info-card p {
-                        color: #333333; 
-                        font-size: 16px;
-                    }
-                    .recommendation {
-                        color: #006400; /* Verde para recomendación */
-                        font-weight: bold;
-                    }
-                    .result {
-                        font-size: 2em;
-                        color: #333333;
-                        font-weight: bold;
-                    }
-                </style>
-            """, unsafe_allow_html=True)
 
             # Título de la sección
             
@@ -695,8 +690,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.markdown(f"""
                 <div class='info-card'>
                     <h3>Resultado del Análisis y Recomendación</h3>
-                    <p class='result'>Resultado: {resultado_html}</p>
-                    <p class='recommendation'>Recomendación: {recomendacion}</p>
+                    <p class='result'>Mangas ha hablado: 👉 {resultado_html} 👈 {recomendacion}</p>
                 </div>
             """, unsafe_allow_html=True)
             
