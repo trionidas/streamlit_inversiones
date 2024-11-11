@@ -416,29 +416,29 @@ st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layo
 # Get current date
 current_date = datetime.now().strftime("%d de %B de %Y")
 
-# Custom CSS for styling the title
+# Custom CSS for styling the title with minimal vertical spacing
 st.markdown(
     f"""
     <style>
     .title-container {{
         background-color: #add8e6; /* Light blue color */
-        padding: 10px 20px;
+        padding: 5px 15px; /* Reduced padding for less vertical space */
         border-radius: 8px;
         text-align: center;
-        margin-top: 10px;
-        margin-bottom: 20px;
+        margin-top: 5px; /* Reduced top margin */
+        margin-bottom: 10px; /* Reduced bottom margin */
         box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for elegance */
     }}
     .title-container h1 {{
         color: #2c3e50; /* Darker text color for contrast */
-        font-size: 24px;
+        font-size: 22px;
         font-weight: bold;
-        margin: 0;
+        margin: 0; /* No margin for tighter spacing */
     }}
     .title-container p {{
         color: #6c757d; /* Muted color for date text */
-        font-size: 14px;
-        margin: 5px 0 0;
+        font-size: 12px;
+        margin: 0; /* No margin for tighter spacing */
     }}
     </style>
     <div class="title-container">
