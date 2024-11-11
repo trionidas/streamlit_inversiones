@@ -455,9 +455,21 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 
-uploaded_file = st.file_uploader("Sube tu archivo CSV", type="csv")
+# Inicializar el estado de la sesión si es necesario
+if 'file_uploaded' not in st.session_state:
+    st.session_state.file_uploaded = False
 
-if uploaded_file is not None:
+# Mostrar el cargador solo si no se ha cargado un archivo
+if not st.session_state.file_uploaded:
+    uploaded_file = st.file_uploader("Sube tu archivo CSV", type="csv")
+    if uploaded_file is not None:
+        st.session_state.uploaded_file = uploaded_file
+        st.session_state.file_uploaded = True
+        st.experimental_rerun()
+
+
+# Procesar el archivo si está en el estado de la sesión
+if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file'):
     try:
         # Cargar los datos del archivo CSV
         df = load_data(st.session_state.uploaded_file)
@@ -754,3 +766,9 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {str(e)}")
+        # Opción para reiniciar
+        if st.button("Cargar un archivo diferente"):
+            st.session_state.file_uploaded = False
+            if hasattr(st.session_state, 'uploaded_file'):
+                del st.session_state.uploaded_file
+            st.experimental_rerun()
