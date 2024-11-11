@@ -434,7 +434,7 @@ st.markdown(
     }}
     .title-container h1 {{
         color: #555555; /* Lighter gray color */
-        font-size: 19px;
+        font-size: 18px;
         font-weight: 450; /* Normal weight */
         margin: 0;
         font-family: 'Roboto', sans-serif;
@@ -445,7 +445,7 @@ st.markdown(
     }}
     </style>
     <div class="title-container">
-        <h1>🚀 Intelligent Investor 📅 <span class="date">{current_date}</span></h1>
+        <h1>🚀 Intelligent Investor <span class="date">{current_date}</span></h1>
     </div>
     """,
     unsafe_allow_html=True
