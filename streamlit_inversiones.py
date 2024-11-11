@@ -472,7 +472,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
         df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         
-        tab1, tab2, tab3 = st.tabs(["Resumen", "Visualizaciones", "Información de Empresas"])
+        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Visualizaciones", "Información de Empresas", "Datos Cargados"])
 
 
         with tab1:
@@ -574,29 +574,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-
-            st.subheader('Datos Cargados')
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-
-            # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
-            df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
-            df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
-            df_to_display.reset_index(drop=True, inplace=True)
-
-            # Aplicar estilo al DataFrame y solo formatear celdas numéricas
-            styled_html = df_to_display.style.format({
-                'FECHA': lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x,
-                'VOLUMEN': lambda x: "{:.2f}".format(x) if isinstance(x, (int, float)) else x,
-                'PRECIO_ACCION': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x,
-                'PRECIO_OPERACION_EUR': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x
-            }).applymap(lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else 'color: red; font-weight: bold;', subset=['TIPO_OP']) \
-            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) else '', subset=['TICKER']) \
-            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) and x.startswith("TRANSFERENCIA") else '', subset=['COMENTARIO']).to_html(index=False)
-
-            # Mostrar el DataFrame estilizado como HTML en Streamlit
-            st.markdown(styled_html, unsafe_allow_html=True)
-
-
 
         with tab2:
 
@@ -760,6 +737,28 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             # Mostrar la tabla en Streamlit usando HTML
             st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
+        with tab4:
+
+            st.subheader('Datos Cargados')
+            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+
+            # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
+            df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
+            df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
+            df_to_display.reset_index(drop=True, inplace=True)
+
+            # Aplicar estilo al DataFrame y solo formatear celdas numéricas
+            styled_html = df_to_display.style.format({
+                'FECHA': lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x,
+                'VOLUMEN': lambda x: "{:.2f}".format(x) if isinstance(x, (int, float)) else x,
+                'PRECIO_ACCION': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x,
+                'PRECIO_OPERACION_EUR': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x
+            }).applymap(lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else 'color: red; font-weight: bold;', subset=['TIPO_OP']) \
+            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) else '', subset=['TICKER']) \
+            .applymap(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) and x.startswith("TRANSFERENCIA") else '', subset=['COMENTARIO']).to_html(index=False)
+
+            # Mostrar el DataFrame estilizado como HTML en Streamlit
+            st.markdown(styled_html, unsafe_allow_html=True)# En la Tab 2
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {str(e)}")
