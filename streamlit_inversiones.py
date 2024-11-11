@@ -413,46 +413,41 @@ def analizar_sp500():
 # Configuración de la página
 st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
 
-# Obtener la fecha actual en formato deseado (por ejemplo, "10 de noviembre de 2024")
-fecha_actual = datetime.now().strftime("%d de %B de %Y")
+# Get current date
+current_date = datetime.now().strftime("%d de %B de %Y")
 
-# CSS personalizado para el título de la página con un diseño más elegante y compacto
-st.markdown(f"""
+# Custom CSS for styling the title
+st.markdown(
+    f"""
     <style>
-        .title-container {{
-            background-color: #4a90e2; /* Azul menos intenso */
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-            margin-bottom: 15px;
-            box-shadow: 1px 1px 8px rgba(0, 0, 0, 0.1);
-        }}
-        .title-text {{
-            color: white; /* Texto en blanco */
-            font-size: 2em;
-            font-weight: bold;
-            font-family: 'Arial', sans-serif;
-        }}
-        .subtitle-text {{
-            color: #d1d5db; /* Color gris claro para el subtítulo */
-            font-size: 1em;
-            font-family: 'Arial', sans-serif;
-            margin-top: 3px;
-        }}
-        .date-text {{
-            color: #ffd700; /* Dorado para la fecha */
-            font-weight: bold;
-        }}
+    .title-container {{
+        background-color: #add8e6; /* Light blue color */
+        padding: 10px 20px;
+        border-radius: 8px;
+        text-align: center;
+        margin-top: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for elegance */
+    }}
+    .title-container h1 {{
+        color: #2c3e50; /* Darker text color for contrast */
+        font-size: 24px;
+        font-weight: bold;
+        margin: 0;
+    }}
+    .title-container p {{
+        color: #6c757d; /* Muted color for date text */
+        font-size: 14px;
+        margin: 5px 0 0;
+    }}
     </style>
-""", unsafe_allow_html=True)
-
-# Mostrar el título estilizado con la fecha actual en otro color
-st.markdown(f"""
     <div class="title-container">
-        <div class="title-text">Análisis de Inversiones</div>
-        <div class="subtitle-text">Datos actualizados a <span class="date-text">{fecha_actual}</span></div>
+        <h1>Análisis de Inversiones</h1>
+        <p>Datos actualizados a {current_date}</p>
     </div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
 
 # Inicializar el estado de la sesión si es necesario
