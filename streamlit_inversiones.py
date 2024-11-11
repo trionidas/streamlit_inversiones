@@ -434,7 +434,7 @@ st.markdown(
     }}
     .title-container h1 {{
         color: #555555; /* Lighter gray color */
-        font-size: 22px;
+        font-size: 19px;
         font-weight: 450; /* Normal weight */
         margin: 0;
         font-family: 'Roboto', sans-serif;
@@ -484,7 +484,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.markdown("""
                 <style>
                     .resumen-cartera p {
-                        font-size: 20px !important;
+                        font-size: 16px !important;
                         line-height: 1.5;
                     }
                 </style>
