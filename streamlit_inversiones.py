@@ -413,37 +413,39 @@ def analizar_sp500():
 # Configuración de la página
 st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
 
-# Get current date
-current_date = datetime.now().strftime("%d de %B de %Y")
+# Get current date in the specified format
+current_date = datetime.now().strftime("%Y-%m-%d")
 
-# Custom CSS for styling the title with minimal vertical spacing
+
+# Custom CSS for single-line title with date styled as part of the title and a refined font
 st.markdown(
     f"""
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
     <style>
     .title-container {{
-        background-color: #add8e6; /* Light blue color */
-        padding: 5px 15px; /* Reduced padding for less vertical space */
+        background-color: #add8e6;
+        padding: 5px 15px;
         border-radius: 8px;
-        text-align: center;
-        margin-top: 5px; /* Reduced top margin */
-        margin-bottom: 10px; /* Reduced bottom margin */
-        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for elegance */
+        text-align: left; /* Align content to the left */
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }}
     .title-container h1 {{
-        color: #2c3e50; /* Darker text color for contrast */
+        color: #555555; /* Lighter gray color */
         font-size: 22px;
-        font-weight: bold;
-        margin: 0; /* No margin for tighter spacing */
+        font-weight: 450; /* Normal weight */
+        margin: 0;
+        font-family: 'Roboto', sans-serif;
     }}
-    .title-container p {{
-        color: #6c757d; /* Muted color for date text */
-        font-size: 12px;
-        margin: 0; /* No margin for tighter spacing */
+    .title-container .date {{
+        color: #DAA520; /* Orange color for date */
+        font-weight: 400; /* Normal weight */
     }}
     </style>
     <div class="title-container">
-        <h1>Análisis de Inversiones</h1>
-        <p>Datos actualizados a {current_date}</p>
+        <h1>🚀 Intelligent Investor 📅 <span class="date">{current_date}</span></h1>
     </div>
     """,
     unsafe_allow_html=True
