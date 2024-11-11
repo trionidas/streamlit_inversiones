@@ -518,7 +518,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
 
             exchange_rate = get_exchange_rate()
-            st.info(f"Tipo de cambio utilizado: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
+            st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
 
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
