@@ -136,7 +136,7 @@ def plot_portfolio_distribution(results):
         results,
         values='Valor Actual (EUR)',
         names='Ticker',
-        title='Distribución de la Cartera por Valor Actual',
+        title=' ',
         color_discrete_sequence=px.colors.sequential.Blues_r  # Colores en tonos de azul suave
     )
     
@@ -410,6 +410,12 @@ def analizar_sp500():
     recomendacion = "QUEDATE EN FONDO" if contador > 0 else "SALTA A BONOS"
     return contador, recomendacion, df_analysis
 
+
+# Function to display a styled subheader
+def styled_subheader(text):
+    st.markdown(f'<div class="subheader"><span class="subheader-icon">🔅</span>{text}</div>', unsafe_allow_html=True)
+
+
 # Configuración de la página
 st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
 
@@ -417,39 +423,61 @@ st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layo
 current_date = datetime.now().strftime("%Y-%m-%d")
 
 
-# Custom CSS for single-line title with date styled as part of the title and a refined font
+# Custom CSS for subheader styling
 st.markdown(
-    f"""
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    """
     <style>
-    .title-container {{
-        background-color: #add8e6;
-        padding: 5px 15px;
-        border-radius: 8px;
-        text-align: left; /* Align content to the left */
-        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    .subheader {
+        background-color: #5B9BD5; /* Blue background */
+        color: white;
+        font-size: 20px;
+        font-weight: bold;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-top: 10px;
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
-        gap: 10px;
-    }}
-    .title-container h1 {{
-        color: #555555; /* Lighter gray color */
+    }
+    .subheader-icon {
         font-size: 18px;
-        font-weight: 450; /* Normal weight */
-        margin: 0;
+        margin-right: 10px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
+# Custom CSS for single-line title with date styled as part of the title and a refined font
+# Custom CSS for a title with a horizontal line underneath
+st.markdown(
+    f"""
+    <style>
+    .title-container {{
+        text-align: left; /* Align title to the left */
+        padding: 5px 0;
         font-family: 'Roboto', sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        color: #555555; /* Light gray for title */
+        border-bottom: 3px solid #FFA500; /* Orange line similar to the example */
     }}
-    .title-container .date {{
-        color: #DAA520; /* Orange color for date */
-        font-weight: 400; /* Normal weight */
+    .date {{
+        color: #FFA500; /* Orange color for the date */
+        font-weight: bold;
     }}
     </style>
     <div class="title-container">
-        <h1>🚀 Intelligent Investor <span class="date">{current_date}</span></h1>
+        Intelligent Investor <span class="date">({current_date})</span>
     </div>
     """,
     unsafe_allow_html=True
 )
+
+
+
 
 
 # Inicializar el estado de la sesión si es necesario
@@ -476,7 +504,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
 
         with tab1:
-            st.subheader('Resumen Total de la Cartera')
+            
+            styled_subheader('Resumen Total de la Cartera')
 
             results = analyze_investments(df)
 
@@ -522,7 +551,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
-            st.subheader('Detalle de Inversiones por Ticker')
+            styled_subheader('Detalle de Inversiones por Ticker')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             # Crear el DataFrame con detalles de inversión por ticker
@@ -579,14 +608,15 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             # En la Tab 2
 
-            st.subheader('Distribución de la Cartera')
+            
+            styled_subheader('Distribución de la Cartera')
             portfolio_distribution_fig = plot_portfolio_distribution(results)
             if portfolio_distribution_fig is not None:
                 st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
             else:
                 st.warning("No se pudo generar el gráfico de distribución de la cartera.")
 
-            st.subheader('Evolución de la Inversión')  
+            styled_subheader('Evolución de la Inversión')  
               
             try:
                 # Calcular los datos de inversión a lo largo del tiempo
@@ -600,7 +630,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                 st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
                 
         
-            st.subheader('Rendimiento de Ticker Específico')
+            
+            styled_subheader('Rendimiento de Ticker Específico')
 
             # Selector de ticker
             tickers = df['TICKER'].unique()
@@ -650,7 +681,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             """, unsafe_allow_html=True)
 
             # Título de la sección
-            st.subheader('Análisis del S&P 500')
+            
+            styled_subheader('Análisis del S&P 500')
 
             # Resultado y recomendación del análisis
             resultado, recomendacion, df_analysis = analizar_sp500()
@@ -697,7 +729,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
 
             # Información de empresas con formato visual mejorado
-            st.subheader('Información de Empresas')
+            
+            styled_subheader('Información de Empresas')
             company_data = []
             for ticker in df['TICKER'].unique():
                 # Excluir el ticker "NVDA"
@@ -739,7 +772,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
         with tab4:
 
-            st.subheader('Datos Cargados')
+            
+            styled_subheader('Datos Cargados')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
             # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
