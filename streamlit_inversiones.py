@@ -53,11 +53,11 @@ def get_exchange_rate():
             # st.write(f"Tipo de cambio obtenido de datos históricos: 1 USD = {rate} EUR")
             return rate
         
-        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.92 EUR")
+        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.85 EUR")
         return 0.85
     
     except Exception as e:
-        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.92 EUR")
+        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.85 EUR")
         return 0.85
 
 def get_current_price(ticker):
