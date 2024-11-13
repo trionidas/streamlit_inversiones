@@ -32,33 +32,33 @@ def load_data(uploaded_file):
 
 def get_exchange_rate():
     try:
+        # Obtener el ticker para el tipo de cambio USD/EUR
         usd_eur = yf.Ticker("USDEUR=X")
-        rate = usd_eur.info.get('regularMarketPrice')
         
+        # Intentar recuperar el precio de mercado actual
+        rate = usd_eur.info.get('regularMarketPrice')
+
+        # Verificar si se obtuvo un valor válido
         if rate is not None:
             st.write(f"Tipo de cambio obtenido: 1 USD = {rate} EUR")
             return rate
-        
+
+        # Si no se pudo obtener el tipo de cambio USD/EUR, intenta el inverso
         eur_usd = yf.Ticker("EURUSD=X")
         rate = eur_usd.info.get('regularMarketPrice')
-        
+
         if rate is not None:
             inverse_rate = 1 / rate
             st.write(f"Tipo de cambio obtenido (inverso): 1 USD = {inverse_rate} EUR")
             return inverse_rate
-        
-        hist = usd_eur.history(period="1d")
-        if not hist.empty and 'Close' in hist.columns:
-            rate = hist['Close'].iloc[-1]
-            # st.write(f"Tipo de cambio obtenido de datos históricos: 1 USD = {rate} EUR")
-            return rate
-        
-        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.85 EUR")
+
+        # Si no se obtuvo nada, usar un valor predeterminado
+        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.92 EUR")
         return 0.85
-    
+
     except Exception as e:
-        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.85 EUR")
-        return 0.85
+        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.92 EUR")
+        return 0.92
 
 def get_current_price(ticker):
     try:
