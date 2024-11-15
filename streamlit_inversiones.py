@@ -53,12 +53,12 @@ def get_exchange_rate():
             # st.write(f"Tipo de cambio obtenido de datos históricos: 1 USD = {rate} EUR")
             return rate
         
-        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.85 EUR")
-        return 0.85
+        st.warning("No se pudo obtener el tipo de cambio actual. Usando 1 USD = 0.93 EUR")
+        return 0.93
     
     except Exception as e:
-        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.85 EUR")
-        return 0.85
+        st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.93 EUR")
+        return 0.93
 
 def get_current_price(ticker):
     try:
@@ -220,25 +220,25 @@ def calculate_investment_value_over_time(df, results):
     exchange_rate = get_exchange_rate()
     
     df_sorted = df.sort_values('FECHA')
-    date_range = pd.date_range(start=df_sorted['FECHA'].min(), end=datetime.now(), freq='M')
+    date_range = pd.date_range(start=df_sorted['FECHA'].min(), end=datetime.now(), freq='ME')
     monthly_data = pd.DataFrame(index=date_range)
     
     # Corregir el cálculo de la inversión acumulada para no incluir dividendos
     buy_df = df_sorted[df_sorted['TIPO_OP'] == 'BUY']
-    monthly_data['Inversión Acumulada'] = buy_df.set_index('FECHA').resample('M')['PRECIO_OPERACION_EUR'].sum().cumsum()
+    monthly_data['Inversión Acumulada'] = buy_df.set_index('FECHA').resample('ME')['PRECIO_OPERACION_EUR'].sum().cumsum()
     
     tickers = df['TICKER'].unique()
     monthly_prices = get_monthly_prices(tickers, df_sorted['FECHA'].min(), datetime.now())
     # Convertir el índice a fin de mes
-    monthly_prices.index = monthly_prices.index.to_period('M').to_timestamp('M')
-    monthly_data.index = monthly_data.index.to_period('M').to_timestamp('M')
+    monthly_prices.index = monthly_prices.index.to_period('ME').to_timestamp('ME')
+    monthly_data.index = monthly_data.index.to_period('ME').to_timestamp('ME')
     
     shares_accumulated = {}
     for ticker in tickers:
         ticker_df = df_sorted[df_sorted['TICKER'] == ticker]
         shares = ticker_df.set_index('FECHA')['VOLUMEN'].cumsum()
-        shares_accumulated[ticker] = shares.resample('M').last().fillna(method='ffill')
-        shares_accumulated[ticker].index = shares_accumulated[ticker].index.to_period('M').to_timestamp('M')
+        shares_accumulated[ticker] = shares.resample('ME').last().ffill(method='ffill')
+        shares_accumulated[ticker].index = shares_accumulated[ticker].index.to_period('ME').to_timestamp('ME')
     
     monthly_data['Valor de la Inversión'] = 0
     
@@ -354,7 +354,7 @@ def analizar_sp500():
     end_date = datetime.now()
     start_date = end_date - timedelta(days=14*30) # Aumentamos a 14 meses para asegurar 13 meses completos
     data = sp500.history(start=start_date, end=end_date, interval="1mo")
-    monthly_closes = data['Close'].resample('M').last().tail(13) # Ahora tomamos los últimos 13 meses
+    monthly_closes = data['Close'].resample('ME').last().tail(13) # Ahora tomamos los últimos 13 meses
     
     contador = 0
     cambios = []
@@ -386,7 +386,7 @@ def analizar_sp500():
     end_date = datetime.now()
     start_date = end_date - timedelta(days=14*30)  # Aumentamos a 14 meses para asegurar 13 meses completos
     data = sp500.history(start=start_date, end=end_date, interval="1mo")
-    monthly_closes = data['Close'].resample('M').last().tail(13)  # Ahora tomamos los últimos 13 meses
+    monthly_closes = data['Close'].resample('ME').last().tail(13)  # Ahora tomamos los últimos 13 meses
     
     contador = 0
     cambios = []
@@ -772,7 +772,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
             df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
-            df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
+            df_to_display.ffill("", inplace=True)  # Reemplaza NaN con cadena vacía
             df_to_display.reset_index(drop=True, inplace=True)
 
             # Aplicar estilo al DataFrame y solo formatear celdas numéricas
