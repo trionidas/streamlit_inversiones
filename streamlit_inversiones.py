@@ -239,7 +239,7 @@ def calculate_investment_value_over_time(df, results):
         shares_accumulated[ticker] = shares.resample('M').last().ffill()
         shares_accumulated[ticker].index = shares_accumulated[ticker].index.to_period('M').to_timestamp('M')
     
-    monthly_data['Valor de la Inversión'] = 0
+    monthly_data['Valor de la Inversión'] = 0.0
     
     for date in monthly_data.index:
         
@@ -528,8 +528,10 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
         df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         
-        tab1, tab2, tab3, tab4 = st.tabs(["Resumen", "Visualizaciones", "Análisis SP500", "Datos Cargados"])
+        tabs = st.tabs(["Resumen", "Visualizaciones", "Análisis SP500", "Análisis empresas","Datos Cargados",])
+        tab1, tab2, tab3, tab4, tab5 = tabs
 
+    
         with tab1:
             
             styled_subheader('Resumen Total de la Cartera')
@@ -764,8 +766,63 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
         with tab4:
+       
+            styled_subheader("Información de Empresas")
+            
+            # Obtener tickers únicos de los activos en el DataFrame
+            tickers = [ticker for ticker in df['TICKER'].unique() if ticker != '0P0000IKFS.F']
+            selected_ticker = st.selectbox("Selecciona un ticker", tickers)
+
+            if selected_ticker:
+                try:
+                    # Usar yfinance para obtener información financiera
+                    ticker = yf.Ticker(selected_ticker)
+                    info = ticker.info
+                    cashflow = ticker.cashflow
+
+                    if not info:
+                        st.warning("No se encontró información financiera para este ticker.")
+                    else:
+                        # Métricas financieras
+                        st.subheader("Métricas Financieras")
+                        st.write(f"**Relación P/E:** {info.get('trailingPE', 'N/A')}")
+                        st.write(f"**Relación P/BV:** {info.get('priceToBook', 'N/A')}")
+                        st.write(f"**Ratio de liquidez:** {info.get('currentRatio', 'N/A')}")
+                        st.write(f"**Ratio de liquidez rápida:** {info.get('quickRatio', 'N/A')}")
+                        st.write(f"**Rendimiento de dividendos:** {info.get('dividendYield', 'N/A')}")
+                        st.write(f"**Ganancias por acción (EPS):** {info.get('trailingEps', 'N/A')}")
+                        st.write(f"**Beta:** {info.get('beta', 'N/A')}")
+                        st.write(f"**Capitalización de mercado:** {info.get('marketCap', 'N/A')}")
+
+                    # Métricas de flujo de efectivo
+                    styled_subheader("Métricas de Flujo de Efectivo")
+                    try:
+                        if not cashflow.empty:
+                            operating_cash_flow = cashflow.loc["Total Cash From Operating Activities"].iloc[0]
+                            capital_expenditures = cashflow.loc["Capital Expenditures"].iloc[0]
+                            free_cash_flow = operating_cash_flow - capital_expenditures
+                            st.write(f"**Flujo de caja operativo:** {operating_cash_flow}")
+                            st.write(f"**Gastos de capital:** {capital_expenditures}")
+                            st.write(f"**Flujo de caja libre:** {free_cash_flow}")
+                        else:
+                            st.write("No se encontró información de flujo de caja para este ticker.")
+                    except Exception as e:
+                        st.write("No se pudo calcular el flujo de caja libre. Datos insuficientes.")
+
+                    # Datos adicionales
+                    styled_subheader("Datos Adicionales")
+                    st.write(f"**Deuda sobre patrimonio:** {info.get('debtToEquity', 'N/A')}")
+                    st.write(f"**Retorno sobre el patrimonio (ROE):** {info.get('returnOnEquity', 'N/A')}")
+                    st.write(f"**Retorno sobre los activos (ROA):** {info.get('returnOnAssets', 'N/A')}")
+                    st.write(f"**Relación P/E futura:** {info.get('forwardPE', 'N/A')}")
+                    st.write(f"**Valor de la empresa:** {info.get('enterpriseValue', 'N/A')}")
+                except Exception as e:
+                    st.error(f"Error al obtener datos para el ticker {selected_ticker}: {str(e)}")
 
             
+
+        with tab5:
+        # TAB 5: Información de empresas
             styled_subheader('Datos Cargados')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
@@ -786,6 +843,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             # Mostrar el DataFrame estilizado como HTML en Streamlit
             st.markdown(styled_html, unsafe_allow_html=True)# En la Tab 2
+
 
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {str(e)}")
