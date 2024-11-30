@@ -5,10 +5,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
-# from pypfopt import EfficientFrontier, risk_models, expected_returns
 import io
 import re
 import numpy as np
+from typing import Optional
 
 def clean_number(x):
     if isinstance(x, str):
@@ -44,20 +44,12 @@ def get_exchange_rate():
         rate = eur_usd.fast_info['last_price']
         if rate is not None:
             return 1 / rate
-    
-        '''
-        # Respaldo adicional: Historial de USDEUR=X
-        hist = usd_eur.history(period="1d")
-        if not hist.empty and 'Close' in hist.columns:
-            return hist['Close'].iloc[-1]
-        '''
-        
+       
         # Valor por defecto si todas las fuentes fallan
         return 0.93
     except Exception as e:
         st.warning(f"Error al obtener el tipo de cambio: {str(e)}. Usando 1 USD = 0.93 EUR")
         return 0.93
-
 
 def get_current_price(ticker):
     try:
@@ -77,6 +69,14 @@ def get_current_price(ticker):
     except Exception as e:
         st.warning(f"Error al obtener datos para {ticker}: {str(e)}")
         return None
+    
+
+# Función para obtener el precio actual (recuperamos para Intrinsec value)
+def get_current_price2(info: dict) -> float:
+    """
+    Obtiene el precio actual del mercado desde la información del stock.
+    """
+    return info.get('currentPrice', None)
 
 @st.cache_data(ttl=3600)
 def get_historical_data(ticker, start_date, end_date):
@@ -271,9 +271,7 @@ def calculate_investment_value_over_time(df, results):
                     price *= exchange_rate
                 value = shares * price
                 ticker_values.append(value)
-                
-
-        
+      
         total_value = np.nansum(ticker_values)
         
         monthly_data.loc[date, 'Valor de la Inversión'] = total_value
@@ -309,9 +307,6 @@ def plot_investment_over_time(df, results):
     )
     
     return fig
-
-import numpy as np
-
 
 def get_earnings_date(ticker):
     try:
@@ -351,38 +346,6 @@ def get_stock_splits(ticker, start_date):
 def analizar_sp500():
     sp500 = yf.Ticker("^GSPC")
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=14*30) # Aumentamos a 14 meses para asegurar 13 meses completos
-    data = sp500.history(start=start_date, end=end_date, interval="1mo")
-    monthly_closes = data['Close'].resample('M').last().tail(13) # Ahora tomamos los últimos 13 meses
-    
-    contador = 0
-    cambios = []
-    
-    for i in range(1, len(monthly_closes)):
-        if monthly_closes.iloc[i] > monthly_closes.iloc[i-1]:
-            contador += 1
-            cambios.append(1)
-        elif monthly_closes.iloc[i] < monthly_closes.iloc[i-1]:
-            contador -= 1
-            cambios.append(-1)
-        else:
-            cambios.append(0)
-
-    # Añadir un 0 al principio de la lista de cambios para alinear con monthly_closes
-    cambios = [0] + cambios
-    
-    df_analysis = pd.DataFrame({
-        'Fecha': monthly_closes.index,
-        'Precio de Cierre': monthly_closes.values,
-        'Cambio': cambios
-    })
-    
-    recomendacion = "Quédate en Fondo" if contador > 0 else "Salta a Bonos"
-    return contador, recomendacion, df_analysis
-
-def analizar_sp500():
-    sp500 = yf.Ticker("^GSPC")
-    end_date = datetime.now()
     start_date = end_date - timedelta(days=14*30)  # Aumentamos a 14 meses para asegurar 13 meses completos
     data = sp500.history(start=start_date, end=end_date, interval="1mo")
     monthly_closes = data['Close'].resample('M').last().tail(13)  # Ahora tomamos los últimos 13 meses
@@ -409,18 +372,158 @@ def analizar_sp500():
     recomendacion = "Quédate en el Fondo" if contador > 0 else "Cambia a Bonobos"
     return contador, recomendacion, df_analysis
 
+def calculate_intrinsic_value2(
+    ticker: str,
+    discount_rate: float = 0.10,
+    growth_stage_years: int = 10,
+    terminal_stage_years: int = 10,
+    terminal_growth_rate: float = 0.04
+) -> Optional[float]:
+    """
+    Calcula el valor intrínseco usando trailingEPS de yfinance con ajustes para evitar divisores problemáticos.
+    """
+    try:
+        # Validar tasas para evitar divisiones por cero o problemas de precisión
+        if discount_rate <= 0:
+            raise ValueError("La tasa de descuento debe ser positiva.")
+        if terminal_growth_rate >= discount_rate:
+            terminal_growth_rate = discount_rate - 0.01  # Ajustar para evitar problemas
+
+        # Obtener datos de la acción
+        stock = yf.Ticker(ticker)
+        info = stock.info
+
+        # Obtener trailingEPS
+        trailing_eps = info.get('trailingEps', None)
+        if trailing_eps is None or trailing_eps <= 0:
+            print(f"No se encontró un trailingEPS válido para {ticker}. Usando valor predeterminado.")
+            trailing_eps = 5.0  # EPS predeterminado si no está disponible
+
+        # Suponer una tasa de crecimiento promedio (ajustada para evitar problemas)
+        growth_rate = min(0.10, discount_rate - 0.01)  # Limitar crecimiento para que sea razonable
+
+        # Calcular factores x e y según el modelo DCF
+        x = (1 + growth_rate) / (1 + discount_rate)
+        y = (1 + terminal_growth_rate) / (1 + discount_rate)
+
+        # Validar que x y y no generen divisiones por cero o resultados cercanos a 1
+        if abs(1 - x) < 1e-3 or abs(1 - y) < 1e-3:
+            print(f"Tasas conflictivas para {ticker}. Ajustando factores x e y.")
+            x = 0.95  # Valor ajustado
+            y = 0.90  # Valor ajustado
+
+        # Calcular valor presente de ganancias futuras en etapa de crecimiento
+        growth_stage_value = trailing_eps * x * (1 - x**growth_stage_years) / (1 - x)
+
+        # Calcular valor presente del valor terminal
+        terminal_value = (trailing_eps *
+                          (x**growth_stage_years) *
+                          y *
+                          (1 - y**terminal_stage_years) /
+                          (1 - y))
+
+        # Valor intrínseco total
+        intrinsic_value = growth_stage_value + terminal_value
+        print(f"Valor intrínseco calculado para {ticker}: {intrinsic_value}")
+
+        return float(intrinsic_value)
+
+    except ZeroDivisionError as e:
+        print(f"Error: División por cero en el cálculo para {ticker}. Detalles: {str(e)}")
+        return None
+    except ValueError as ve:
+        print(f"Error calculando el valor intrínseco para {ticker}: {str(ve)}")
+        return None
+    except Exception as e:
+        print(f"Error calculando el valor intrínseco para {ticker}: {str(e)}")
+        return None
+
+# Función para calcular el valor intrínseco
+def calculate_intrinsic_value(
+    eps: float,
+    discount_rate: float,
+    growth_rate: float,
+    growth_stage_years: int,
+    terminal_growth_rate: float
+) -> dict:
+    """
+    Calcula el valor intrínseco basado en EPS y tasas proporcionadas.
+    Retorna un diccionario con detalles del cálculo.
+    """
+    try:
+        if discount_rate <= terminal_growth_rate:
+            raise ValueError("La tasa de descuento debe ser mayor que la tasa de crecimiento terminal.")
+        
+        # Detalles anuales de crecimiento
+        growth_values = []
+        for i in range(1, growth_stage_years + 1):
+            growth_value = eps * ((1 + growth_rate) ** i) / ((1 + discount_rate) ** i)
+            growth_values.append({
+                "Año": i,
+                "Crecimiento EPS (estimado)": eps * ((1 + growth_rate) ** i),
+                "Valor presente (descuento aplicado)": growth_value
+            })
+
+        # Cálculo del valor terminal limitado a 10 años
+        terminal_values = []
+        eps_final = eps * ((1 + growth_rate) ** growth_stage_years)  # EPS final al final del crecimiento
+        for i in range(growth_stage_years + 1, growth_stage_years + 11):  # 10 años adicionales
+            terminal_eps = eps_final * ((1 + terminal_growth_rate) ** (i - growth_stage_years))
+            terminal_value = terminal_eps / ((1 + discount_rate) ** i)
+            terminal_values.append({
+                "Año": i,
+                "Valor Terminal (estimado)": terminal_eps,
+                "Valor presente (descuento aplicado)": terminal_value
+            })
+
+        # Sumar ambos componentes
+        total_growth_value = sum([row["Valor presente (descuento aplicado)"] for row in growth_values])
+        total_terminal_value = sum([row["Valor presente (descuento aplicado)"] for row in terminal_values])
+
+        intrinsic_value = total_growth_value + total_terminal_value
+
+        return {
+            "intrinsic_value": intrinsic_value,
+            "growth_values": growth_values,
+            "terminal_values": terminal_values,
+            "total_growth_value": total_growth_value,
+            "total_terminal_value": total_terminal_value,
+        }
+    except Exception as e:
+        st.warning(f"Error al calcular el valor intrínseco: {str(e)}")
+        return None
+
+# Función para obtener datos del stock
+def get_stock_info(ticker: str) -> dict:
+
+    try:
+        stock = yf.Ticker(ticker)
+        return stock.info
+    except Exception as e:
+        st.error(f"Error al obtener la información del stock: {str(e)}")
+        return {}
+
+
+# Function to determine background color based on thresholds, útil para el análisis de stocks (PE PBV, etc)
+def get_bg_color(value, thresholds):
+    if value is None or value == "N/A":
+        return "background-color: gray;"
+    elif value < thresholds[0]:
+        return "background-color: green; color: white;"
+    elif thresholds[0] <= value <= thresholds[1]:
+        return "background-color: yellow; color: black;"
+    else:
+        return "background-color: red; color: white;"
 
 # Function to display a styled subheader
 def styled_subheader(text):
     st.markdown(f'<div class="subheader"><span class="subheader-icon">🔅</span>{text}</div>', unsafe_allow_html=True)
-
 
 # Configuración de la página
 st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
 
 # Get current date in the specified format
 current_date = datetime.now().strftime("%Y-%m-%d")
-
 
 # Custom CSS for subheader styling
 st.markdown(
@@ -446,8 +549,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-
 
 # Custom CSS for single-line title with date styled as part of the title and a refined font
 # Custom CSS for a title with a horizontal line underneath
@@ -475,39 +576,6 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Global CSS styling at the start of the app (outside tabs)
-st.markdown("""
-    <style>
-        .info-card {
-            background-color: #eef2f7; 
-            padding: 10px; 
-            border-radius: 10px; 
-            margin-bottom: 10px; 
-            box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.1);
-        }
-        .info-card h3 {
-            color: #0033A0; 
-            font-size: 20px; 
-            margin-bottom: 5px; /* Reduced bottom margin */
-        }
-        .info-card p {
-            color: #333333; 
-            font-size: 16px;
-            margin-top: 0px; /* Remove top margin */
-            margin-bottom: 0px; /* Remove bottom margin */
-        }
-        .recommendation {
-            color: #006400; /* Green color for recommendation */
-            font-weight: bold;
-        }
-        .result {
-            font-size: 1.5em; /* Adjusted font size */
-            color: #333333;
-            font-weight: bold;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
@@ -520,7 +588,6 @@ if not st.session_state.file_uploaded:
         st.session_state.file_uploaded = True
         st.rerun()
 
-
 # Procesar el archivo si está en el estado de la sesión
 if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file'):
     try:
@@ -528,9 +595,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
         df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         
-        tabs = st.tabs(["Resumen", "Visualizaciones", "Análisis SP500", "Análisis empresas","Datos Cargados",])
+        tabs = st.tabs(["Resumen", "Visualizaciones", "Datos Cargados","Análisis Empresas","Análisis SP500", ])
         tab1, tab2, tab3, tab4, tab5 = tabs
-
     
         with tab1:
             
@@ -547,7 +613,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                     }
                 </style>
             """, unsafe_allow_html=True)
-
 
             # Cálculos de resumen total
             total_invested = results['Total Invertido (EUR)'].sum()
@@ -572,8 +637,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                     </p>
                 </div>
             """, unsafe_allow_html=True)
-
-
 
             exchange_rate = get_exchange_rate()
             st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
@@ -630,10 +693,8 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                 # Línea divisoria entre tickers
                 st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
 
-
         with tab2:
-
-            # En la Tab 2            
+       
             styled_subheader('Distribución de la Cartera')
 
             portfolio_distribution_fig = plot_portfolio_distribution(results)
@@ -675,56 +736,9 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                 st.info("Selecciona un ticker para ver su rendimiento.")
 
         with tab3:
-
-            # Título de la sección
-            
-            styled_subheader('Análisis del S&P 500')
-
-            # Resultado y recomendación del análisis
-            resultado, recomendacion, df_analysis = analizar_sp500()
-            
-            # Color del resultado
-            resultado_color = "green" if resultado > 0 else "red"
-            resultado_html = f'<span style="color:{resultado_color}; font-size: 1.5em;">{resultado}</span>'
-            
-            # Mostrar análisis y recomendación en una tarjeta compacta
-            st.markdown(f"""
-                <div class='info-card'>
-                    <h3>Resultado del Análisis y Recomendación</h3>
-                    <p class='result'>Mangas ha hablado: 👉 {resultado_html} 👈 {recomendacion}</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Formatear la fecha para el gráfico
-            df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
-            
-            # Gráfico de líneas con Plotly
-            fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
-                        labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
-                        title='S&P 500 - Últimos 13 meses')
-            fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
-            st.plotly_chart(fig)
-            
-            # Tabla mejorada para visualizar datos de precios
-            df_display = df_analysis.copy()
-            df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
-            df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
-            
-            # Agregar flechas con color en HTML
-            df_display['Cambio'] = df_display['Cambio'].map({
-                1: '<span style="color:green;">⬆</span>', 
-                -1: '<span style="color:red;">⬇</span>', 
-                0: '→'
-            })
-            
-            # Reordenar columnas y presentar la tabla con HTML renderizado
-            df_display = df_display[['Fecha', 'Precio de Cierre', 'Cambio']]
-            st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-            st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
-
-            # Información de empresas con formato visual mejorado
-            
+          
+        # Información de empresas con formato visual mejorado
+                    
             styled_subheader('Información de Empresas')
             company_data = []
             for ticker in df['TICKER'].unique():
@@ -765,64 +779,6 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
             # Mostrar la tabla en Streamlit usando HTML
             st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
 
-        with tab4:
-       
-            styled_subheader("Información de Empresas")
-            
-            # Obtener tickers únicos de los activos en el DataFrame
-            tickers = [ticker for ticker in df['TICKER'].unique() if ticker != '0P0000IKFS.F']
-            selected_ticker = st.selectbox("Selecciona un ticker", tickers)
-
-            if selected_ticker:
-                try:
-                    # Usar yfinance para obtener información financiera
-                    ticker = yf.Ticker(selected_ticker)
-                    info = ticker.info
-                    cashflow = ticker.cashflow
-
-                    if not info:
-                        st.warning("No se encontró información financiera para este ticker.")
-                    else:
-                        # Métricas financieras
-                        st.subheader("Métricas Financieras")
-                        st.write(f"**Relación P/E:** {info.get('trailingPE', 'N/A')}")
-                        st.write(f"**Relación P/BV:** {info.get('priceToBook', 'N/A')}")
-                        st.write(f"**Ratio de liquidez:** {info.get('currentRatio', 'N/A')}")
-                        st.write(f"**Ratio de liquidez rápida:** {info.get('quickRatio', 'N/A')}")
-                        st.write(f"**Rendimiento de dividendos:** {info.get('dividendYield', 'N/A')}")
-                        st.write(f"**Ganancias por acción (EPS):** {info.get('trailingEps', 'N/A')}")
-                        st.write(f"**Beta:** {info.get('beta', 'N/A')}")
-                        st.write(f"**Capitalización de mercado:** {info.get('marketCap', 'N/A')}")
-
-                    # Métricas de flujo de efectivo
-                    styled_subheader("Métricas de Flujo de Efectivo")
-                    try:
-                        if not cashflow.empty:
-                            operating_cash_flow = cashflow.loc["Total Cash From Operating Activities"].iloc[0]
-                            capital_expenditures = cashflow.loc["Capital Expenditures"].iloc[0]
-                            free_cash_flow = operating_cash_flow - capital_expenditures
-                            st.write(f"**Flujo de caja operativo:** {operating_cash_flow}")
-                            st.write(f"**Gastos de capital:** {capital_expenditures}")
-                            st.write(f"**Flujo de caja libre:** {free_cash_flow}")
-                        else:
-                            st.write("No se encontró información de flujo de caja para este ticker.")
-                    except Exception as e:
-                        st.write("No se pudo calcular el flujo de caja libre. Datos insuficientes.")
-
-                    # Datos adicionales
-                    styled_subheader("Datos Adicionales")
-                    st.write(f"**Deuda sobre patrimonio:** {info.get('debtToEquity', 'N/A')}")
-                    st.write(f"**Retorno sobre el patrimonio (ROE):** {info.get('returnOnEquity', 'N/A')}")
-                    st.write(f"**Retorno sobre los activos (ROA):** {info.get('returnOnAssets', 'N/A')}")
-                    st.write(f"**Relación P/E futura:** {info.get('forwardPE', 'N/A')}")
-                    st.write(f"**Valor de la empresa:** {info.get('enterpriseValue', 'N/A')}")
-                except Exception as e:
-                    st.error(f"Error al obtener datos para el ticker {selected_ticker}: {str(e)}")
-
-            
-
-        with tab5:
-        # TAB 5: Información de empresas
             styled_subheader('Datos Cargados')
             st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
@@ -843,6 +799,363 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
 
             # Mostrar el DataFrame estilizado como HTML en Streamlit
             st.markdown(styled_html, unsafe_allow_html=True)# En la Tab 2
+
+            # Custom CSS para mejorar la apariencia
+            st.markdown("""
+            <style>
+                /* Estilos generales */
+                .stApp {
+                    background-color: #f8fafc;
+                }
+                
+                /* Estilo para las métricas */
+                .metric-card {
+                    background-color: white;
+                    padding: 1.5rem;
+                    border-radius: 0.5rem;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+                    margin: 0.5rem 0;
+                    transition: transform 0.2s ease;
+                }
+                .metric-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                }
+                .metric-label {
+                    color: #64748b;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                    margin-bottom: 0.5rem;
+                }
+                .metric-value {
+                    font-size: 1.5rem;
+                    font-weight: 600;
+                    margin-bottom: 0.25rem;
+                }
+                
+                /* Estilos para la tabla */
+                .styled-table {
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    margin: 1rem 0;
+                    background-color: white;
+                    border-radius: 0.5rem;
+                    overflow: hidden;
+                }
+                .styled-table thead th {
+                    background-color: #f1f5f9;
+                    color: #475569;
+                    font-weight: 600;
+                    padding: 0.75rem 1rem;
+                    text-align: left;
+                }
+                .styled-table tbody td {
+                    padding: 0.75rem 1rem;
+                    border-top: 1px solid #e2e8f0;
+                }
+                
+                /* Estilos para los indicadores */
+                .indicator-green {
+                    background-color: #dcfce7;
+                    color: #166534;
+                }
+                .indicator-yellow {
+                    background-color: #fef9c3;
+                    color: #854d0e;
+                }
+                .indicator-red {
+                    background-color: #fee2e2;
+                    color: #991b1b;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+
+        with tab4:
+            styled_subheader("Elección de empresa")
+
+            # Preload S&P 500 tickers
+            sp500_tickers = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA']
+            
+            selected_ticker = st.selectbox("Select a Stock Ticker", options=sp500_tickers)
+
+            if selected_ticker:
+                try:
+                    # Fetch stock data
+                    stock = yf.Ticker(selected_ticker)
+                    info = stock.info
+                    # Recuperar EPS y EPS without NRI
+                    trailing_eps = info.get('trailingEps', None)
+
+                    # Extract and process metrics
+                    metrics = {
+                        "Market Cap": {
+                            "value": round(info.get('marketCap', 0) / 1e9, 2),
+                            "format": lambda x: f"${x}B",
+                            "thresholds": {"green": 10, "yellow": 5}
+                        },
+                        "ROE": {
+                            "value": round(info.get('returnOnEquity', 0) * 100, 2),
+                            "format": lambda x: f"{x}%",
+                            "thresholds": {"green": 15, "yellow": 8}
+                        },
+                        "Debt/Equity": {
+                            "value": round(info.get('debtToEquity', 0), 2),
+                            "format": lambda x: f"{x}",
+                            "thresholds": {"green": 0.6, "yellow": 1.5},
+                            "inverse": True
+                        },
+                        "Current Ratio": {
+                            "value": round(info.get('currentRatio', 0), 2),
+                            "format": lambda x: f"{x}",
+                            "thresholds": {"green": 2, "yellow": 1}
+                        },
+                        "PE Ratio": {
+                            "value": round(info.get('trailingPE', 0), 2),
+                            "format": lambda x: f"{x}",
+                            "thresholds": {"green": 15, "yellow": 30},
+                            "inverse": True
+                        },
+                        "PBV Ratio": {
+                            "value": round(info.get('priceToBook', 0), 2),
+                            "format": lambda x: f"{x}",
+                            "thresholds": {"green": 1.5, "yellow": 4.5},
+                            "inverse": True
+                        }
+                    }
+                    
+                    cols = st.columns(3)
+                    for idx, (metric_name, metric_data) in enumerate(metrics.items()):
+                        with cols[idx % 3]:
+                            value = metric_data["value"]
+                            formatted_value = metric_data["format"](value)
+                            
+                            if metric_data.get("inverse", False):
+                                color = ("indicator-green" if value < metric_data["thresholds"]["green"] else
+                                        "indicator-yellow" if value < metric_data["thresholds"]["yellow"] else
+                                        "indicator-red")
+                            else:
+                                color = ("indicator-green" if value > metric_data["thresholds"]["green"] else
+                                        "indicator-yellow" if value > metric_data["thresholds"]["yellow"] else
+                                        "indicator-red")
+                            
+                            st.markdown(f"""
+                                <div class="metric-card {color}">
+                                    <div class="metric-label">{metric_name}</div>
+                                    <div class="metric-value">{formatted_value}</div>
+                                </div>
+                            """, unsafe_allow_html=True)
+
+                    styled_subheader("💰 Análisis de Flujo de Efectivo")
+                    try:
+                        cashflow = stock.quarterly_cashflow
+                        if not cashflow.empty:
+                            main_cashflows = ['Operating Cash Flow', 'Investing Cash Flow', 'Financing Cash Flow', 'Free Cash Flow']
+                            cashflow_data = cashflow.loc[main_cashflows].T
+                            cashflow_data.index = pd.to_datetime(cashflow_data.index)
+                            cashflow_data = cashflow_data.sort_index()
+                            cashflow_data = cashflow_data.div(1e6)
+                            cashflow_data = cashflow_data.tail(5)
+                            
+                            fig = go.Figure()
+                            colors = {
+                                'Operating Cash Flow': '#2563eb',
+                                'Investing Cash Flow': '#16a34a',
+                                'Financing Cash Flow': '#dc2626',
+                                'Free Cash Flow': '#9333ea'
+                            }
+                            
+                            for column in cashflow_data.columns:
+                                fig.add_trace(
+                                    go.Scatter(
+                                        x=cashflow_data.index,
+                                        y=cashflow_data[column],
+                                        name=column,
+                                        mode='lines+markers',
+                                        line=dict(color=colors[column], width=3),
+                                        marker=dict(size=8),
+                                        hovertemplate='<b>%{x|%Y-%m-%d}</b><br>' + f'{column}: $%{{y:.0f}}M<br>'
+                                    )
+                                )
+                            
+                            fig.update_layout(
+                                template='plotly_white',
+                                height=500,
+                                margin=dict(t=30, r=10, b=10, l=10),
+                                hovermode='x unified',
+                                legend=dict(
+                                    orientation="h",
+                                    yanchor="bottom",
+                                    y=1.02,
+                                    xanchor="right",
+                                    x=1
+                                ),
+                                xaxis=dict(showgrid=True, gridwidth=1, gridcolor='#f1f5f9'),
+                                yaxis=dict(showgrid=True, gridwidth=1, gridcolor='#f1f5f9', title=dict(text="Millones USD", standoff=10))
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            styled_subheader("📈 Variación Trimestral")
+                            metric_cols = st.columns(len(main_cashflows))
+                            for idx, column in enumerate(cashflow_data.columns):
+                                with metric_cols[idx]:
+                                    last_value = cashflow_data[column].iloc[-1]
+                                    prev_value = cashflow_data[column].iloc[-2]
+                                    change = ((last_value - prev_value) / abs(prev_value)) * 100
+                                    st.metric(label=column.replace("Cash Flow", "CF"), value=f"${last_value:.0f}M", delta=f"{change:.1f}%")
+                        else:
+                            st.warning("No hay datos de flujo de efectivo disponibles para este stock.")
+                    except Exception as e:
+                        st.error(f"Error al procesar datos de flujo de efectivo: {str(e)}")
+
+                except Exception as e:
+                    st.error(f"Error al obtener datos para {selected_ticker}: {str(e)}")
+
+                styled_subheader("Valores Intrínsecos de Inversiones")
+
+                # Parámetros de entrada
+                discount_rate = st.number_input("Tasa de Descuento (%)", min_value=0.01, value=10.0, step=0.1) / 100
+                growth_rate = st.number_input("Tasa de Crecimiento Anual (%)", min_value=0.01, value=10.0, step=0.1) / 100
+                growth_stage_years = st.number_input("Años de Crecimiento", min_value=1, value=10, step=1)
+                terminal_growth_rate = st.number_input("Tasa de Crecimiento Terminal (%)", min_value=0.01, value=4.0, step=0.1) / 100
+
+                # Inicializar variables en session_state
+                if "iv_result" not in st.session_state:
+                    st.session_state.iv_result = None
+                    st.session_state.current_price = None
+                    st.session_state.mos = None
+                    st.session_state.calculate = False  # Control de cálculo
+
+                # Botón para calcular el valor intrínseco
+                if st.button("Calcular Valor Intrínseco"):
+                    st.session_state.calculate = True  # Marcar que se debe calcular
+                    try:
+                        # Obtener datos del stock
+                        stock_info = get_stock_info(selected_ticker)
+                        trailing_eps = stock_info.get("trailingEps", None)
+
+                        if trailing_eps is None:
+                            st.error("El EPS (trailingEps) no está disponible para este ticker.")
+                            st.session_state.calculate = False  # Desactivar cálculo
+                            st.stop()
+
+                        # Calcular el valor intrínseco
+                        iv_result = calculate_intrinsic_value(
+                            eps=trailing_eps,
+                            discount_rate=discount_rate,
+                            growth_rate=growth_rate,
+                            growth_stage_years=growth_stage_years,
+                            terminal_growth_rate=terminal_growth_rate
+                        )
+
+                        if iv_result:
+                            current_price = get_current_price2(stock_info)
+                            mos = ((iv_result["intrinsic_value"] - current_price) / iv_result["intrinsic_value"]) * 100
+
+                            # Guardar resultados en el estado
+                            st.session_state.iv_result = iv_result
+                            st.session_state.current_price = current_price
+                            st.session_state.mos = mos
+                        else:
+                            st.warning("No se pudo calcular el valor intrínseco.")
+                            st.session_state.calculate = False  # Desactivar cálculo
+                    except Exception as e:
+                        st.error(f"Error durante el cálculo: {str(e)}")
+                        st.session_state.calculate = False  # Desactivar cálculo
+
+                # Mostrar los resultados solo si se presionó el botón y se calcularon los resultados
+                if st.session_state.calculate and st.session_state.iv_result:
+                    iv_result = st.session_state.iv_result
+                    current_price = st.session_state.current_price
+                    mos = st.session_state.mos
+
+                    st.subheader(f"Resultados para {selected_ticker}")
+
+                    # Diseño con columnas para alinear las tarjetas
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        # Tarjeta para el Precio Actual
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Precio Actual</div>
+                                <div class="metric-value">${current_price:,.2f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                    with col2:
+                        # Tarjeta para el Valor Intrínseco
+                        st.markdown(f"""
+                            <div class="metric-card">
+                                <div class="metric-label">Valor Intrínseco</div>
+                                <div class="metric-value">${iv_result['intrinsic_value']:,.2f}</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                    with col3:
+                        # Tarjeta para el Margen de Seguridad (MoS)
+                        mos_color = "indicator-green" if mos > 0 else "indicator-red"
+                        st.markdown(f"""
+                            <div class="metric-card {mos_color}">
+                                <div class="metric-label">Margen de Seguridad (MoS)</div>
+                                <div class="metric-value">{mos:.2f}%</div>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+
+
+
+
+        with tab5:
+
+            # Título de la sección
+            
+            styled_subheader('Análisis del S&P 500')
+            # Resultado y recomendación del análisis
+            resultado, recomendacion, df_analysis = analizar_sp500()
+
+            # Determinar el color basado en el resultado
+            resultado_color = "green" if resultado > 0 else "red"
+
+            # Mostrar análisis y recomendación con HTML para el color
+            st.markdown(
+                f"""
+                <div style="background-color: #f0f8ff; padding: 10px; border-radius: 5px; border: 1px solid #cce7ff;">
+                    📈 Resultado del análisis: <span style="color:{resultado_color}; font-weight:bold;">{resultado}</span> |
+                    Recomendación: <span style="font-weight:bold;">{recomendacion}</span>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+            # Formatear la fecha para el gráfico
+            df_analysis['Fecha_Formato'] = df_analysis['Fecha'].dt.strftime('%b %Y')
+            
+            # Gráfico de líneas con Plotly
+            fig = px.line(df_analysis, x='Fecha_Formato', y='Precio de Cierre', 
+                        labels={'Fecha_Formato': 'Fecha', 'Precio de Cierre': 'Precio de Cierre ($)'},
+                        title='S&P 500 - Últimos 13 meses')
+            fig.update_layout(xaxis_title='Fecha', yaxis_title='Precio de Cierre ($)')
+            st.plotly_chart(fig)
+            
+            # Tabla mejorada para visualizar datos de precios
+            df_display = df_analysis.copy()
+            df_display['Fecha'] = df_display['Fecha'].dt.strftime('%Y-%m-%d')
+            df_display['Precio de Cierre'] = df_display['Precio de Cierre'].round(2)
+            
+            # Agregar flechas con color en HTML
+            df_display['Cambio'] = df_display['Cambio'].map({
+                1: '<span style="color:green;">⬆</span>', 
+                -1: '<span style="color:red;">⬇</span>', 
+                0: '→'
+            })
+            
+            # Reordenar columnas y presentar la tabla con HTML renderizado
+            df_display = df_display[['Fecha', 'Precio de Cierre', 'Cambio']]
+            st.write(df_display.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            st.info("Nota: El 'Cambio' representa la variación mensual (⬆: alza, ⬇: baja, →: sin cambio).")
 
 
     except Exception as e:
