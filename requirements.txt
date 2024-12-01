@@ -15,4 +15,3 @@ peewee==3.17.6
 platformdirs==4.2.2
 soupsieve==2.5
 webencodings==0.5.1
-bokeh==
