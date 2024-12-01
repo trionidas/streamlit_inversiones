@@ -653,7 +653,7 @@ if not st.session_state.file_uploaded:
             df = pd.read_csv(uploaded_file)  # Intenta cargar el archivo
             st.session_state.uploaded_file = uploaded_file
             st.session_state.file_uploaded = True
-            st.rerun()
+
         except Exception as e:
             st.error(f"Error al cargar el archivo: {e}")
 
