@@ -9,9 +9,7 @@ import io
 import re
 import numpy as np
 from typing import Optional
-from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool
-from bokeh.layouts import row
+
 
 def clean_number(x):
     if isinstance(x, str):
