@@ -643,6 +643,7 @@ st.markdown(
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
+    st.session_state.active_tab = 0  # Inicializar la pestaña activa
 
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
@@ -653,6 +654,10 @@ if not st.session_state.file_uploaded:
             df = pd.read_csv(uploaded_file)  # Intenta cargar el archivo
             st.session_state.uploaded_file = uploaded_file
             st.session_state.file_uploaded = True
+            st.session_state.active_tab = 0  # Asegurar que se seleccione la primera pestaña
+            
+            # Ocultar el cargador de archivos después de cargar exitosamente
+            st.rerun()
 
         except Exception as e:
             st.error(f"Error al cargar el archivo: {e}")
@@ -662,6 +667,7 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
     # Si el archivo está cargado, mostrar todas las pestañas
     tabs = st.tabs(["Resumen", "Visualizaciones", "Datos Cargados", "Análisis Empresas", "Análisis SP500"])
     tab1, tab2, tab3, tab4, tab5 = tabs
+
     # Cargar los datos del archivo CSV
     df = load_data(st.session_state.uploaded_file)
     df['FECHA'] = pd.to_datetime(df['FECHA'])
@@ -716,18 +722,21 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
                     </div>
                 """.format(total_current_value), unsafe_allow_html=True)
 
+
             # Tarjeta para el Rendimiento
             rendimiento_color = "green" if total_profit_loss >= 0 else "red"
             with col3:
-                st.markdown("""
+                st.markdown(f"""
                     <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);">
                         <h4 style="margin:0; color:#333; font-size:14px;">📊 Rendimiento</h4>
-                        <p style="font-size:20px; font-weight:bold; margin:5px 0; color:{1};">
-                            {0:+,.2f} € ({2:+.2f}%)
+                        <p style="font-size:20px; font-weight:bold; margin:5px 0; color:{rendimiento_color};">
+                            {total_profit_loss:+,.2f} €
+                        </p>
+                        <p style="font-size:16px; font-weight:normal; margin:0; color:{rendimiento_color};">
+                            {total_profit_loss_percentage:+.2f}%
                         </p>
                     </div>
-                """.format(total_profit_loss, rendimiento_color, total_profit_loss_percentage), unsafe_allow_html=True)
-
+                """, unsafe_allow_html=True)
             # Tarjeta para los Dividendos
             with col4:
                 st.markdown("""
@@ -1124,9 +1133,9 @@ with tab4:
                         legend=dict(
                             orientation="h",
                             yanchor="bottom",
-                            y=1.02,
+                            y=-0.3,
                             xanchor="right",
-                            x=1
+                            x=0.5
                         ),
                         xaxis=dict(showgrid=True, gridwidth=1, gridcolor='#f1f5f9'),
                         yaxis=dict(showgrid=True, gridwidth=1, gridcolor='#f1f5f9', title=dict(text="Millones USD", standoff=10))
@@ -1194,81 +1203,81 @@ with tab4:
             st.session_state.mos = None
             st.session_state.calculate = False  # Control de cálculo
 
-        # Botón para calcular el valor intrínseco
-        if st.button("Calcular Valor Intrínseco"):
-            st.session_state.calculate = True  # Marcar que se debe calcular
-            try:
-                # Obtener datos del stock
-                stock_info = get_stock_info(selected_ticker)
-                trailing_eps = stock_info.get("trailingEps", None)
+    # Botón para calcular el valor intrínseco
+    if st.button("Calcular Valor Intrínseco"):
+        st.session_state.calculate = True  # Marcar que se debe calcular
+        try:
+            # Obtener datos del stock
+            stock_info = get_stock_info(selected_ticker)
+            trailing_eps = stock_info.get("trailingEps", None)
 
-                if trailing_eps is None:
-                    st.error("El EPS (trailingEps) no está disponible para este ticker.")
-                    st.session_state.calculate = False  # Desactivar cálculo
-                    st.stop()
-
-                # Calcular el valor intrínseco
-                iv_result = calculate_intrinsic_value(
-                    eps=trailing_eps,
-                    discount_rate=discount_rate,
-                    growth_rate=growth_rate,
-                    growth_stage_years=growth_stage_years,
-                    terminal_growth_rate=terminal_growth_rate
-                )
-
-                if iv_result:
-                    current_price = get_current_price2(stock_info)
-                    mos = ((iv_result["intrinsic_value"] - current_price) / iv_result["intrinsic_value"]) * 100
-
-                    # Guardar resultados en el estado
-                    st.session_state.iv_result = iv_result
-                    st.session_state.current_price = current_price
-                    st.session_state.mos = mos
-                else:
-                    st.warning("No se pudo calcular el valor intrínseco.")
-                    st.session_state.calculate = False  # Desactivar cálculo
-            except Exception as e:
-                st.error(f"Error durante el cálculo: {str(e)}")
+            if trailing_eps is None:
+                st.error("El EPS (trailingEps) no está disponible para este ticker.")
                 st.session_state.calculate = False  # Desactivar cálculo
+                st.stop()
 
-        # Mostrar los resultados solo si se presionó el botón y se calcularon los resultados
-        if st.session_state.calculate and st.session_state.iv_result:
-            iv_result = st.session_state.iv_result
-            current_price = st.session_state.current_price
-            mos = st.session_state.mos
+            # Calcular el valor intrínseco
+            iv_result = calculate_intrinsic_value(
+                eps=trailing_eps,
+                discount_rate=discount_rate,
+                growth_rate=growth_rate,
+                growth_stage_years=growth_stage_years,
+                terminal_growth_rate=terminal_growth_rate
+            )
 
-            st.subheader(f"Resultados para {selected_ticker}")
+            if iv_result:
+                current_price = get_current_price2(stock_info)
+                mos = ((iv_result["intrinsic_value"] - current_price) / iv_result["intrinsic_value"]) * 100
 
-            # Diseño con columnas para alinear las tarjetas
-            col1, col2, col3 = st.columns(3)
+                # Guardar resultados en el estado
+                st.session_state.iv_result = iv_result
+                st.session_state.current_price = current_price
+                st.session_state.mos = mos
+            else:
+                st.warning("No se pudo calcular el valor intrínseco.")
+                st.session_state.calculate = False  # Desactivar cálculo
+        except Exception as e:
+            st.error(f"Error durante el cálculo: {str(e)}")
+            st.session_state.calculate = False  # Desactivar cálculo
 
-            with col1:
-                # Tarjeta para el Precio Actual
-                st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Precio Actual</div>
-                        <div class="metric-value">${current_price:,.2f}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+    # Mostrar los resultados solo si se presionó el botón y se calcularon los resultados
+    if st.session_state.calculate and st.session_state.iv_result:
+        iv_result = st.session_state.iv_result
+        current_price = st.session_state.current_price
+        mos = st.session_state.mos
 
-            with col2:
-                # Tarjeta para el Valor Intrínseco
-                st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Valor Intrínseco</div>
-                        <div class="metric-value">${iv_result['intrinsic_value']:,.2f}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+        st.subheader(f"Resultados para {selected_ticker}")
 
-            with col3:
-                # Tarjeta para el Margen de Seguridad (MoS)
-                mos_color = "indicator-green" if mos > 0 else "indicator-red"
-                st.markdown(f"""
-                    <div class="metric-card {mos_color}">
-                        <div class="metric-label">Margen de Seguridad (MoS)</div>
-                        <div class="metric-value">{mos:.2f}%</div>
-                    </div>
-                """, unsafe_allow_html=True)
+        # Diseño con columnas para alinear las tarjetas
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            # Tarjeta para el Precio Actual
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Precio Actual</div>
+                    <div class="metric-value">${current_price:,.2f}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            # Tarjeta para el Valor Intrínseco
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Valor Intrínseco</div>
+                    <div class="metric-value">${iv_result['intrinsic_value']:,.2f}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            # Tarjeta para el Margen de Seguridad (MoS)
+            mos_color = "indicator-green" if mos > 0 else "indicator-red"
+            st.markdown(f"""
+                <div class="metric-card {mos_color}">
+                    <div class="metric-label">Margen de Seguridad (MoS)</div>
+                    <div class="metric-value">{mos:.2f}%</div>
+                </div>
+            """, unsafe_allow_html=True)
 
 with tab5:
 
