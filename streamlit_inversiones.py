@@ -631,7 +631,7 @@ if not st.session_state.file_uploaded:
             st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
 
             # Volver a renderizar para actualizar el estado
-            st.rerun()
+            st.experimental_rerun()
         except Exception as e:
             st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
 else:
