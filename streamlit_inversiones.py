@@ -9,6 +9,7 @@ import io
 import re
 import numpy as np
 from typing import Optional
+from streamlit_extras.app_logo import add_logo
 
 
 def clean_number(x):
@@ -579,9 +580,8 @@ def styled_subheader(text):
     )
 
 # Configuración de la página
-st.set_page_config(page_title="Análisis de Inversiones", page_icon="📊", layout="wide")
-
-
+st.set_page_config(page_title="Análisis de Inversiones", page_icon="🐸", layout="centered")
+add_logo("https://imgur.com/a/p9kb3Mh")
 
 st.markdown(
     """
@@ -609,238 +609,199 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Get current date in the specified format
-current_date = datetime.now().strftime("%Y-%m-%d")
-
-# Custom CSS for a title with a horizontal line underneath
-st.markdown(
-    f"""
-    <style>
-    .title-container {{
-        display: inline-block; /* Limita el ancho del subrayado al contenido */
-        text-align: left; /* Alinear título a la izquierda */
-        padding: 5px 0;
-        font-family: 'Roboto', sans-serif;
-        font-size: 24px; /* Tamaño ligeramente mayor */
-        font-weight: bold;
-        color: #2C3E50; /* Azul oscuro para el texto */
-        border-bottom: 3px solid #4A90E2; /* Subrayado azul elegante */
-    }}
-    .date {{
-        color: #4A90E2; /* Azul elegante para la fecha */
-        font-weight: normal; /* Peso más ligero para diferenciar del título */
-        font-size: 20px; /* Tamaño ligeramente menor */
-    }}
-    </style>
-    <div class="title-container">
-        🐸 Intelligent Investor 📅 <span class="date">({current_date})</span>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
-    st.session_state.active_tab = 0  # Inicializar la pestaña activa
+    st.session_state.uploaded_file = None
+    st.session_state.df = None  # Inicializar el DataFrame como None
 
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
-    uploaded_file = st.file_uploader("", type="csv")
+    st.sidebar.title("📂 Carga tus stonks")
+    with st.sidebar.expander("Subir archivo"):
+        uploaded_file = st.file_uploader("", type="csv")
+
     if uploaded_file is not None:
         try:
             # Validación básica del archivo
-            df = pd.read_csv(uploaded_file)  # Intenta cargar el archivo
+            df = pd.read_csv(uploaded_file)  # Cargar el archivo
             st.session_state.uploaded_file = uploaded_file
+            st.session_state.df = df  # Guardar el DataFrame en session_state
             st.session_state.file_uploaded = True
-            st.session_state.active_tab = 0  # Asegurar que se seleccione la primera pestaña
-            
-            # Ocultar el cargador de archivos después de cargar exitosamente
+            st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+
+            # Volver a renderizar para actualizar el estado
             st.rerun()
-
         except Exception as e:
-            st.error(f"Error al cargar el archivo: {e}")
-
-# Configuración de las pestañas
-if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file'):
-    # Si el archivo está cargado, mostrar todas las pestañas
-    tabs = st.tabs(["Resumen", "Visualizaciones", "Datos Cargados", "Análisis Empresas", "Análisis SP500"])
-    tab1, tab2, tab3, tab4, tab5 = tabs
-
-    # Cargar los datos del archivo CSV
-    df = load_data(st.session_state.uploaded_file)
-    df['FECHA'] = pd.to_datetime(df['FECHA'])
+            st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
 else:
-    # Si no hay archivo cargado, mostrar solo las pestañas 4 y 5
-    tabs = st.tabs(["Análisis Empresas", "Análisis SP500"])
-    tab4, tab5 = tabs
+    # Si ya se cargó, recuperar el DataFrame de session_state
+    df = st.session_state.df
+
+menu1="📊 Resumen"
+menu2="📈 Visualizaciones"
+menu3="📋 Datos Cargados"
+menu4="🏢 Análisis Empresas"
+menu5="📉 Análisis SP500"
+
+# Configuración de las opciones del menú según el estado de carga del CSV
+if st.session_state.file_uploaded:
+    st.sidebar.title("🐸 Stonks")
+    opciones_menu = [
+       menu1,
+       menu2,
+       menu3,
+       menu4,
+       menu5,
+    ]
+    df = load_data(st.session_state.uploaded_file)
+    df['FECHA'] = pd.to_datetime(df['FECHA'])    
+    results = analyze_investments(df)
+
+else:
+
+    opciones_menu = [menu4, menu5]
+
+# Crear el menú lateral
+menu = st.sidebar.radio("", opciones_menu)
 
 # Condiciones para las pestañas
-if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file'):
-    with tab1:
+if menu == menu1 and st.session_state.file_uploaded:
 
-            # styled_subheader('Resumen Total de la Cartera')
+        # styled_subheader('Resumen Total de la Cartera')
 
-            results = analyze_investments(df)
+        # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
+        st.markdown("""
+            <style>
+                .resumen-cartera p {
+                    font-size: 16px !important;
+                    line-height: 1.5;
+                }
+            </style>
+        """, unsafe_allow_html=True)
 
-            # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
-            st.markdown("""
-                <style>
-                    .resumen-cartera p {
-                        font-size: 16px !important;
-                        line-height: 1.5;
-                    }
-                </style>
+        # Cálculos de resumen total
+        total_invested = results['Total Invertido (EUR)'].sum()
+        total_current_value = results['Valor Actual (EUR)'].sum()
+        total_dividends = results['Dividendos Recibidos (EUR)'].sum()
+        total_profit_loss = total_current_value - total_invested + total_dividends
+        total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
+
+        # Mostrar datos en tarjetas
+        col1, col2, col3, col4 = st.columns(4)
+
+        # Tarjeta para el Capital Invertido
+        with col1:
+            st.markdown(f"""
+                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                    <h4 style="margin:0; color:#1d3557; font-size:16px;">💰 Invertido</h4>
+                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_invested:,.2f} €</p>
+                </div>
             """, unsafe_allow_html=True)
 
-            # Cálculos de resumen total
-            total_invested = results['Total Invertido (EUR)'].sum()
-            total_current_value = results['Valor Actual (EUR)'].sum()
-            total_dividends = results['Dividendos Recibidos (EUR)'].sum()
-            total_profit_loss = total_current_value - total_invested + total_dividends
-            total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
+        # Tarjeta para el Valor Actual
+        with col2:
+            st.markdown(f"""
+                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                    <h4 style="margin:0; color:#1d3557; font-size:16px;">📈 Valor Actual</h4>
+                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_current_value:,.2f} €</p>
+                </div>
+            """, unsafe_allow_html=True)
 
-            # Mostrar datos en tarjetas
-            col1, col2, col3, col4 = st.columns(4)
+        # Tarjeta para el Rendimiento (sin h4)
+        rendimiento_color = "#2a9d8f" if total_profit_loss >= 0 else "#e63946"
+        with col3:
+            st.markdown(f"""
+                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px; display: flex; flex-direction: column; justify-content: center;">
+                    <p style="font-size:22px; font-weight:bold; margin:0; color:{rendimiento_color};">
+                        {total_profit_loss:+,.2f} €
+                    </p>
+                    <p style="font-size:18px; font-weight:normal; margin:0; color:{rendimiento_color};">
+                        {total_profit_loss_percentage:+.2f}%
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
 
-            # Tarjeta para el Capital Invertido
-            with col1:
-                st.markdown("""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);">
-                        <h4 style="margin:0; color:#333; font-size:14px;">💰 Invertido</h4>
-                        <p style="font-size:20px; font-weight:bold; margin:5px 0;">{0:,.2f} €</p>
-                    </div>
-                """.format(total_invested), unsafe_allow_html=True)
-
-            # Tarjeta para el Valor Actual
-            with col2:
-                st.markdown("""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);">
-                        <h4 style="margin:0; color:#333; font-size:14px;">📈 Valor Actual</h4>
-                        <p style="font-size:20px; font-weight:bold; margin:5px 0;">{0:,.2f} €</p>
-                    </div>
-                """.format(total_current_value), unsafe_allow_html=True)
-
-
-            # Tarjeta para el Rendimiento
-            rendimiento_color = "green" if total_profit_loss >= 0 else "red"
-            with col3:
-                st.markdown(f"""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);">
-                        <h4 style="margin:0; color:#333; font-size:14px;">📊 Rendimiento</h4>
-                        <p style="font-size:20px; font-weight:bold; margin:5px 0; color:{rendimiento_color};">
-                            {total_profit_loss:+,.2f} €
-                        </p>
-                        <p style="font-size:16px; font-weight:normal; margin:0; color:{rendimiento_color};">
-                            {total_profit_loss_percentage:+.2f}%
-                        </p>
-                    </div>
-                """, unsafe_allow_html=True)
-            # Tarjeta para los Dividendos
-            with col4:
-                st.markdown("""
-                    <div style="background-color:#f9f9f9; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);">
-                        <h4 style="margin:0; color:#333; font-size:14px;">💸 Dividendos</h4>
-                        <p style="font-size:20px; font-weight:bold; margin:5px 0;">{0:,.2f} €</p>
-                    </div>
-                """.format(total_dividends), unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            exchange_rate = get_exchange_rate()
-            st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
-
-            # styled_subheader('Detalle de Inversiones por Ticker')
-            st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
-
-            # Crear el DataFrame con detalles de inversión por ticker
-
-            # Crear el DataFrame con detalles de inversión por ticker
-            data = []
-            for ticker in results['Ticker'].unique():
-                ticker_results = results[results['Ticker'] == ticker]
-                ticker_invested = ticker_results['Total Invertido (EUR)'].values[0]
-                ticker_current_value = ticker_results['Valor Actual (EUR)'].values[0]
-                ticker_profit_loss = ticker_current_value - ticker_invested
-                ticker_profit_loss_percentage = (ticker_profit_loss / ticker_invested) * 100 if ticker_invested != 0 else 0
-                
-                # Obtener valores existentes
-                ticker_daily_change = ticker_results['Variación Diaria (EUR)'].values[0] if 'Variación Diaria (EUR)' in ticker_results.columns else 0
-                ticker_daily_change_percentage = ticker_results['Variación Diaria %'].values[0] if 'Variación Diaria %' in ticker_results.columns else 0
-                ticker_shares = ticker_results['Acciones'].values[0] if 'Acciones' in ticker_results.columns else 0
-                
-                # Calcular Ganancia/Pérdida Diaria en dinero
-                ticker_daily_profit_loss = ticker_daily_change * ticker_shares
-
-                data.append({
-                    'Ticker': ticker,
-                    'Capital Invertido': ticker_invested,
-                    'Valor Actual': ticker_current_value,
-                    'Ganancia/Pérdida': ticker_profit_loss,
-                    'Ganancia/Pérdida %': ticker_profit_loss_percentage,
-                    'Variación Diaria %': ticker_daily_change_percentage,
-                    'Ganancia/Pérdida Diaria (€)': ticker_daily_profit_loss
-                })
-
-            ticker_details_df = pd.DataFrame(data)
-            ticker_details_df = ticker_details_df.sort_values('Ganancia/Pérdida %', ascending=False)
-
-            # Visualización de los resultados con las nuevas columnas unidas
-            col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
-
-            # Fila inicial con nombres de las columnas
-            with col1:
-                st.markdown("**Ticker**", unsafe_allow_html=True)
-            with col2:
-                st.markdown("**💰 Capital Invertido**", unsafe_allow_html=True)
-            with col3:
-                st.markdown("**📈 Valor Actual**", unsafe_allow_html=True)
-            with col4:
-                st.markdown("**Ganancia/Pérdida**", unsafe_allow_html=True)
-            with col5:
-                st.markdown("**Variación Diaria**", unsafe_allow_html=True)
-
-            st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
+        # Tarjeta para los Dividendos
+        with col4:
+            st.markdown(f"""
+                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                    <h4 style="margin:0; color:#1d3557; font-size:16px;">💸 Dividendos</h4>
+                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_dividends:,.2f} €</p>
+                </div>
+            """, unsafe_allow_html=True)
 
 
-            # Visualización de los resultados con las nuevas columnas unidas
-            for index, row in ticker_details_df.iterrows():
-                col1, col2, col3, col4, col5 = st.columns([1, 2, 2, 2, 2])
-                
-                with col1:
-                    st.markdown(f"**<span style='color:blue'>{row['Ticker']}</span>**", unsafe_allow_html=True)
-                with col2:
-                    st.markdown(f"{row['Capital Invertido']:,.2f} €")
-                with col3:
-                    st.markdown(f"{row['Valor Actual']:,.2f} €")
-                
-                # Mostrar Ganancia/Pérdida con color según positivo/negativo
-                profit_loss_color = "green" if row['Ganancia/Pérdida'] >= 0 else "red"
-                with col4:
-                    st.markdown(
-                        f"<span style='color:{profit_loss_color}'> {row['Ganancia/Pérdida']:+,.2f} € ({row['Ganancia/Pérdida %']:+.2f}%)</span>", 
-                        unsafe_allow_html=True
-                    )
-                
-                # Unir Ganancia/Pérdida Diaria (€) y Variación Diaria % en una sola columna con formato correcto
-                try:
-                    daily_profit_loss = float(row['Ganancia/Pérdida Diaria (€)'])
-                    daily_profit_loss_color = "green" if daily_profit_loss > 0 else "red"
-                    daily_change_percentage = float(row['Variación Diaria %'])  # Convertimos a float para evitar errores
-                except (ValueError, TypeError):
-                    daily_profit_loss = 0
-                    daily_profit_loss_color = "black"
-                    daily_change_percentage = 0
+        st.markdown("<br>", unsafe_allow_html=True)
+        exchange_rate = get_exchange_rate()
+        st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
 
-                with col5:
-                    st.markdown(
-                        f"<span style='color:{daily_profit_loss_color}'> {daily_profit_loss:+,.2f} € ({daily_change_percentage:+.2f}%)</span>", 
-                        unsafe_allow_html=True
-                    )
-                
-                st.markdown("<hr style='margin:5px 0;'>", unsafe_allow_html=True)
+        # styled_subheader('Detalle de Inversiones por Ticker')
+        st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
 
-    with tab2:
+        # Crear el DataFrame con detalles de inversión por ticker
+        data = []
+        for ticker in results['Ticker'].unique():
+            ticker_results = results[results['Ticker'] == ticker]
+            ticker_invested = ticker_results['Total Invertido (EUR)'].values[0]
+            ticker_current_value = ticker_results['Valor Actual (EUR)'].values[0]
+            ticker_profit_loss = ticker_current_value - ticker_invested
+            ticker_profit_loss_percentage = (ticker_profit_loss / ticker_invested) * 100 if ticker_invested != 0 else 0
+
+            # Obtener valores existentes
+            ticker_daily_change = ticker_results['Variación Diaria (EUR)'].values[0] if 'Variación Diaria (EUR)' in ticker_results.columns else 0
+            ticker_daily_change_percentage = ticker_results['Variación Diaria %'].values[0] if 'Variación Diaria %' in ticker_results.columns else 0
+            ticker_shares = ticker_results['Acciones'].values[0] if 'Acciones' in ticker_results.columns else 0
+
+            # Calcular Ganancia/Pérdida Diaria en dinero
+            ticker_daily_profit_loss = ticker_daily_change * ticker_shares
+
+            # Agregar datos con dos decimales
+            data.append({
+                'Ticker': ticker,
+                'Invertido (€)': round(ticker_invested, 2),
+                'Valor Actual (€)': round(ticker_current_value, 2),
+                'G/P (€)': round(ticker_profit_loss, 2),
+                'G/P (%)': round(ticker_profit_loss_percentage, 2),
+                'Var. Diaria (€)': round(ticker_daily_profit_loss, 2),
+                'Var. Diaria (%)': round(ticker_daily_change_percentage, 2),
+            })
+
+        ticker_details_df = pd.DataFrame(data)
+        # Convertir el índice en una columna visible (opcional, si hace sentido incluirlo)
+        ticker_details_df = ticker_details_df.reset_index(drop=True)
+
+
+        # Función para aplicar estilos (verde/rojo) de forma directa
+        def apply_styles(df):
+            styled = df.style.format(
+                {
+                    'Invertido (€)': '{:.2f} €',
+                    'Valor Actual (€)': '{:.2f} €',
+                    'G/P (€)': '{:.2f} €',
+                    'G/P (%)': '{:.2f}%',
+                    'Var. Diaria (€)': '{:.2f} €',
+                    'Var. Diaria (%)': '{:.2f}%',
+                }
+            )
+                # Aplicar estilo azul y negrita a la columna Ticker
+            styled = styled.applymap(
+                lambda x: 'color: blue; font-weight: bold;',
+                subset=['Ticker']
+            )
+            # Aplicar colores para valores positivos y negativos
+            styled = styled.applymap(
+                lambda x: 'color: green;' if isinstance(x, (int, float)) and x > 0 else 'color: red;' if isinstance(x, (int, float)) and x < 0 else '',
+                subset=['G/P (€)', 'G/P (%)', 'Var. Diaria (€)', 'Var. Diaria (%)']
+            )
+            return styled
+
+        # Aplicar estilos y mostrar la tabla
+        styled_df = apply_styles(ticker_details_df)
+        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
+
+
+if menu == menu2 and st.session_state.file_uploaded:
     
         styled_subheader('Distribución de la Cartera')
 
@@ -882,77 +843,78 @@ if st.session_state.file_uploaded and hasattr(st.session_state, 'uploaded_file')
         else:
             st.info("Selecciona un ticker para ver su rendimiento.")
 
-    with tab3:
-        
-    # Información de empresas con formato visual mejorado
-                
-        styled_subheader('Información de Empresas')
-        company_data = []
-        for ticker in df['TICKER'].unique():
-            # Excluir el ticker "NVDA"
-            if ticker == "0P0000IKFS.F":
-                continue
+if menu == menu3 and st.session_state.file_uploaded:
 
-            ticker_df = df[df['TICKER'] == ticker]
-            first_purchase_date = ticker_df['FECHA'].min()
-            earnings_date = get_earnings_date(ticker)
-            splits = get_stock_splits(ticker, first_purchase_date)
-            
-            split_details = []
-            if not splits.empty:
-                for date, ratio in splits.items():
-                    split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
-            
-            company_data.append({
-                'Ticker': ticker,
-                'Resultados': earnings_date,
-                'Nº splits': len(splits),
-                'Info splits': ', '.join(split_details) if split_details else 'Ninguno',
-            })
+    # Información de empresas
+    styled_subheader('Información de Empresas')
+    company_data = []
+    for ticker in df['TICKER'].unique():
+        # Excluir el ticker "NVDA"
+        if ticker == "0P0000IKFS.F":
+            continue
 
-        company_info_df = pd.DataFrame(company_data)
+        ticker_df = df[df['TICKER'] == ticker]
+        first_purchase_date = ticker_df['FECHA'].min()
+        earnings_date = get_earnings_date(ticker)
+        splits = get_stock_splits(ticker, first_purchase_date)
 
-        # Ordenar por 'Próxima presentación de resultados' en orden ascendente
-        company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
+        split_details = []
+        if not splits.empty:
+            for date, ratio in splits.items():
+                split_details.append(f"{date.strftime('%Y-%m-%d')}: {ratio:.2f}-for-1")
 
-        # Dar formato a la columna 'Ticker' para que sea azul
-        company_info_df['Ticker'] = company_info_df['Ticker'].apply(lambda x: f'<span style="color:blue;">{x}</span>')
+        company_data.append({
+            'Ticker': ticker,
+            'Resultados': earnings_date,
+            'Nº Splits': len(splits),
+            'Detalles de Splits': ', '.join(split_details) if split_details else 'Ninguno',
+        })
 
-        # Ajustar la alineación de la columna 'Detalles de splits' a la izquierda
-        styled_table = company_info_df.style.format({
-            'Ticker': lambda x: f'<span style="color:blue;">{x}</span>'
-        }).set_properties(subset=['Info splits'], **{'text-align': 'left'})
+    company_info_df = pd.DataFrame(company_data)
 
-        # Mostrar la tabla en Streamlit usando HTML
-        st.write(styled_table.to_html(escape=False, index=False), unsafe_allow_html=True)
+            # Ordenar por 'Próxima presentación de resultados' en orden ascendente
+    company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
 
-        styled_subheader('Datos Cargados')
-        st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+    # Aplicar estilo a la columna 'Ticker' para mostrarla en azul usando pandas Styler
+    company_info_df = company_info_df.style.applymap(
+        lambda x: 'color: blue; font-weight: bold;',
+        subset=['Ticker']
+    )
+    
+    # Mostrar la información de empresas como un dataframe en Streamlit
+    st.dataframe(company_info_df, use_container_width=True, hide_index=True)
 
-        # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
-        df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
-        df_to_display.fillna("", inplace=True) # Reemplaza NaN con cadena vacía
-        df_to_display.reset_index(drop=True, inplace=True)
+    styled_subheader('Datos Cargados')
 
-        # Aplicar estilo al DataFrame y solo formatear celdas numéricas
-        styled_html = df_to_display.style.format({
-            'FECHA': lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x,
-            'VOLUMEN': lambda x: "{:.2f}".format(x) if isinstance(x, (int, float)) else x,
-            'PRECIO_ACCION': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x,
-            'PRECIO_OPERACION_EUR': lambda x: "{:,.2f} €".format(x) if isinstance(x, (int, float)) else x
-        }).map(lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else 'color: red; font-weight: bold;', subset=['TIPO_OP']) \
-        .map(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) else '', subset=['TICKER']) \
-        .map(lambda x: 'color: blue; font-weight: bold;' if isinstance(x, str) and x.startswith("TRANSFERENCIA") else '', subset=['COMENTARIO']).to_html(index=False)
+    # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
+    df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
+    df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
+    df_to_display.reset_index(drop=True, inplace=True)
 
-        # Mostrar el DataFrame estilizado como HTML en Streamlit
-        st.markdown(styled_html, unsafe_allow_html=True)# En la Tab 2
+    # Formatear columnas numéricas y de fechas
+    df_to_display['FECHA'] = df_to_display['FECHA'].apply(lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x)
+    df_to_display['VOLUMEN'] = df_to_display['VOLUMEN'].apply(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
+    df_to_display['PRECIO_ACCION'] = df_to_display['PRECIO_ACCION'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
+    df_to_display['PRECIO_OPERACION_EUR'] = df_to_display['PRECIO_OPERACION_EUR'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
 
-# Custom CSS para mejorar la apariencia
+    # Aplicar estilo a las columnas 'Ticker' y 'TIPO_OP'
+    df_to_display = df_to_display.style.applymap(
+        lambda x: 'color: blue; font-weight: bold;', subset=['TICKER']
+    ).applymap(
+        lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else '', subset=['TIPO_OP']
+    )
+
+    # Mostrar los datos cargados como un dataframe en Streamlit
+    st.dataframe(df_to_display, use_container_width=True, hide_index=True)
+
+
+
+# Custom CSS para mejorar la apariencia (incluye color blanco de fono de aplicación)
 st.markdown("""
 <style>
     /* Estilos generales */
     .stApp {
-        background-color: #f8fafc;
+        background-color: #ffffff !important;
     }
     
     /* Estilo para las métricas */
@@ -1018,7 +980,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-with tab4:
+if menu == menu4:
     styled_subheader("📒 Elección de empresa")
 
     # Preload S&P 500 tickers
@@ -1279,7 +1241,7 @@ with tab4:
                 </div>
             """, unsafe_allow_html=True)
 
-with tab5:
+if menu == menu5:
 
 # Título de la sección
     styled_subheader('📈 Análisis del S&P 500')
