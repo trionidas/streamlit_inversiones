@@ -628,6 +628,8 @@ if not st.session_state.file_uploaded:
             st.session_state.df = df  # Guardar el DataFrame en session_state
             st.session_state.file_uploaded = True
             st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+            st.rerun()
+            
         except Exception as e:
             st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
 else:
