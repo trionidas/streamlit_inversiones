@@ -628,7 +628,6 @@ if not st.session_state.file_uploaded:
             st.session_state.df = df  # Guardar el DataFrame en session_state
             st.session_state.file_uploaded = True
             st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
-            st.experimental_rerun()
 
         except Exception as e:
             st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
@@ -660,6 +659,11 @@ else:
 
 # Crear el menú lateral
 menu = st.sidebar.radio("", opciones_menu)
+
+# Forzar la redirección al actualizar los parámetros de consulta
+if not st.session_state.file_uploaded:
+    st.experimental_set_query_params(file_uploaded=str(st.session_state.file_uploaded))
+
 
 
 # Condiciones para las pestañas
