@@ -618,8 +618,8 @@ if 'file_uploaded' not in st.session_state:
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
     st.sidebar.title("📂 Carga tus stonks")
-    with st.sidebar.expander("Subir archivo"):
-        uploaded_file = st.file_uploader("", type="csv")
+    #with st.sidebar.expander("Subir archivo"):
+    uploaded_file = st.sidebar.file_uploader("", type="csv")
 
     if uploaded_file is not None:
         try:
