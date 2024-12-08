@@ -618,7 +618,6 @@ if 'file_uploaded' not in st.session_state:
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
     st.sidebar.title("📂 Carga tus stonks")
-    #with st.sidebar.expander("Subir archivo"):
     uploaded_file = st.sidebar.file_uploader("", type="csv")
 
     if uploaded_file is not None:
@@ -629,39 +628,37 @@ if not st.session_state.file_uploaded:
             st.session_state.df = df  # Guardar el DataFrame en session_state
             st.session_state.file_uploaded = True
             st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
-
         except Exception as e:
             st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
 else:
-    # Si ya se cargó, recuperar el DataFrame de session_state
+    # Si ya se cargó, recuperar el DataFrame de session_state y ocultar el cargador
+    st.sidebar.title("🐸 Stonks")
     df = st.session_state.df
 
-menu1="📊 Resumen"
-menu2="📈 Visualizaciones"
-menu3="📋 Datos Cargados"
-menu4="🏢 Análisis Empresas"
-menu5="📉 Análisis SP500"
+menu1 = "📊 Resumen"
+menu2 = "📈 Visualizaciones"
+menu3 = "📋 Datos Cargados"
+menu4 = "🏢 Análisis Empresas"
+menu5 = "📉 Análisis SP500"
 
 # Configuración de las opciones del menú según el estado de carga del CSV
 if st.session_state.file_uploaded:
-    st.sidebar.title("🐸 Stonks")
     opciones_menu = [
-       menu1,
-       menu2,
-       menu3,
-       menu4,
-       menu5,
+        menu1,
+        menu2,
+        menu3,
+        menu4,
+        menu5,
     ]
     df = load_data(st.session_state.uploaded_file)
-    df['FECHA'] = pd.to_datetime(df['FECHA'])    
+    df['FECHA'] = pd.to_datetime(df['FECHA'])
     results = analyze_investments(df)
-
 else:
-
     opciones_menu = [menu4, menu5]
 
 # Crear el menú lateral
 menu = st.sidebar.radio("", opciones_menu)
+
 
 # Condiciones para las pestañas
 if menu == menu1 and st.session_state.file_uploaded:
