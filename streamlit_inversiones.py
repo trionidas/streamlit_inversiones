@@ -717,33 +717,30 @@ if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
-    st.session_state.show_uploader = True  # Variable para controlar la visibilidad del uploader
 
-# Mostrar el cargador solo si no se ha cargado un archivo y la variable de estado lo permite
-if st.session_state.show_uploader:
-    with st.sidebar.container():
-        st.title("📂 Carga tus stonks")
-        uploaded_file = st.file_uploader("", type="csv")
-
-        if uploaded_file is not None:
-            try:
-                # Validación básica del archivo
-                df = pd.read_csv(uploaded_file)  # Cargar el archivo
-                st.session_state.uploaded_file = uploaded_file
-                st.session_state.df = df  # Guardar el DataFrame en session_state
-                st.session_state.file_uploaded = True
-                st.session_state.show_uploader = False  # Ocultar el uploader
-                st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
-
-            except Exception as e:
-                st.error(f"❌ Error al cargar el archivo: {e}")
-
-#Elementos del menú lateral
+# Elementos del menú lateral
 menu1 = "📊 Resumen"
 menu2 = "📈 Visualizaciones"
 menu3 = "📋 Datos Cargados"
 menu4 = "🏢 Análisis Empresas"
 menu5 = "📉 Análisis SP500"
+
+# Mostrar el cargador solo si no se ha cargado un archivo
+with st.sidebar.container():
+    st.title("📂 Carga tus stonks")
+    uploaded_file = st.file_uploader("", type="csv")
+
+if uploaded_file is not None:
+    try:
+        # Validación básica del archivo
+        df = pd.read_csv(uploaded_file)  # Cargar el archivo
+        st.session_state.uploaded_file = uploaded_file
+        st.session_state.df = df  # Guardar el DataFrame en session_state
+        st.session_state.file_uploaded = True
+        st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+
+    except Exception as e:
+        st.error(f"❌ Error al cargar el archivo: {e}")
 
 # Configuración de las opciones del menú según el estado de carga del CSV
 if st.session_state.file_uploaded:
