@@ -728,7 +728,7 @@ menu5 = "📉 Análisis SP500"
 # Sidebar content
 with st.sidebar:
     if not st.session_state.file_uploaded:
-        st.title("📂 Carga tus stonks")
+
         uploaded_file = st.file_uploader("", type="csv")
 
         if uploaded_file is not None:
