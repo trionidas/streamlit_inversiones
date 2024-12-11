@@ -717,22 +717,28 @@ if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
-    st.session_state.show_uploader = True  # Variable para controlar la visibilidad del uploader
+    st.session_state.show_uploader = True
+    st.session_state.uploader_key = 0  # Clave inicial para el uploader
 
 # Mostrar el cargador solo si no se ha cargado un archivo y la variable de estado lo permite
 if st.session_state.show_uploader:
     with st.sidebar.container():
         st.title("📂 Carga tus stonks")
-        uploaded_file = st.file_uploader("", type="csv")
+        uploaded_file = st.file_uploader(
+            "",
+            type="csv",
+            key=f"uploader_{st.session_state.uploader_key}" # Usar una clave única
+        )
 
         if uploaded_file is not None:
             try:
                 # Validación básica del archivo
-                df = pd.read_csv(uploaded_file)  # Cargar el archivo
+                df = pd.read_csv(uploaded_file)
                 st.session_state.uploaded_file = uploaded_file
-                st.session_state.df = df  # Guardar el DataFrame en session_state
+                st.session_state.df = df
                 st.session_state.file_uploaded = True
-                st.session_state.show_uploader = False  # Ocultar el uploader
+                st.session_state.show_uploader = False
+                st.session_state.uploader_key += 1  # Incrementar la clave para la próxima vez
                 st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
 
             except Exception as e:
