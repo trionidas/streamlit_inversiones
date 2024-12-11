@@ -737,7 +737,7 @@ with st.sidebar:
             st.session_state.uploaded_file = uploaded_file
             st.session_state.df = df
             st.session_state.file_uploaded = True
-            st.success("✔️ Archivo cargado exitosamente. Menú habilitado.", icon="✅")
+            st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
 
     if st.session_state.file_uploaded:
         st.title("🐸 Stonks")
