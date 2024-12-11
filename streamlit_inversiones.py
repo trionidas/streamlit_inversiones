@@ -12,6 +12,7 @@ from typing import Optional
 from streamlit_extras.app_logo import add_logo
 
 
+
 def clean_number(x):
     if isinstance(x, str):
         x = x.replace('\xa0', '').replace(' ', '')
@@ -586,56 +587,158 @@ add_logo("https://imgur.com/a/p9kb3Mh")
 st.markdown(
     """
     <style>
+    :root {
+      --primary-color: #457b9d;
+      --secondary-color: #1d3557;
+      --background-color: #ffffff;
+      --text-color: #1d3557;
+      --accent-color: #e94957;
+      --light-accent-color: #a8dadc;
+      --success-color: #2a9d8f;
+      --error-color: #e63946;
+      --gray-color: #64748b;
+    }
+
+    /* Estilos generales */
+    .stApp {
+        background-color: var(--background-color) !important;
+    }
+    
+  /* Estilo para las métricas */
+    .metric-card {
+        background-color: white;
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        margin: 0.5rem 0;
+        transition: transform 0.2s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .metric-label {
+        color: var(--gray-color);
+        font-size: 0.875rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    .metric-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+    
+    /* Estilos para la tabla */
+    .styled-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        margin: 1rem 0;
+        background-color: white;
+        border-radius: 0.5rem;
+        overflow: hidden;
+    }
+    .styled-table thead th {
+        background-color: #f1f5f9;
+        color: var(--text-color);
+        font-weight: 600;
+        padding: 0.75rem 1rem;
+        text-align: left;
+    }
+    .styled-table tbody td {
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #e2e8f0;
+    }
+    
+    /* Estilos para los indicadores */
+    .indicator-green {
+        background-color: #dcfce7;
+        color: #166534;
+    }
+    .indicator-yellow {
+        background-color: #fef9c3;
+        color: #854d0e;
+    }
+    .indicator-red {
+        background-color: #fee2e2;
+        color: #991b1b;
+    }
+    /* Estilo para el subheader */
     .subheader-container {
         font-family: 'Roboto', sans-serif;
-        font-size: 18px; /* Tamaño moderado */
-        font-weight: 600; /* Peso ligeramente más fuerte para destacar */
-        color: #2C3E50; /* Azul oscuro para el texto */
-        margin: 10px 0; /* Espaciado superior e inferior */
-        padding: 5px 0; /* Menor relleno */
-        position: relative; /* Para posicionar la línea azul */
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--secondary-color);
+        margin: 10px 0;
+        padding: 5px 0;
+        position: relative;
     }
     .subheader-container::after {
         content: "";
         display: block;
-        width: 100%; /* Línea que ocupa todo el ancho */
-        height: 2px; /* Grosor más fino */
-        background-color: #4A90E2; /* Azul elegante */
-        margin-top: 5px; /* Separación de la línea respecto al texto */
-        border-radius: 1px; /* Bordes suaves de la línea */
+        width: 100%;
+        height: 2px;
+        background-color: var(--primary-color);
+        margin-top: 5px;
+        border-radius: 1px;
+    }
+     /* Estilo para las tarjetas de resumen */
+     [data-testid="stHorizontalBlock"] > div {
+        margin: 0 !important; /* Elimina el margen para que las tarjetas se toquen */
+    }
+    /* Estilo para la info box */
+    .info-box {
+        background-color: var(--background-color);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+        border: 1px solid #a8dadc;
+    }
+    /* Estilo para las tarjetas de cashflow */
+    .card-container {
+        height: 200px; /* Ajusta la altura según sea necesario */
+        margin-bottom: 10px; /* Espacio entre tarjetas */
+        display: flex;
+        flex-direction: column;
+    }
+    .card-content {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
-    st.session_state.df = None  # Inicializar el DataFrame como None
+    st.session_state.df = None
 
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
-    st.sidebar.title("📂 Carga tus stonks")
-    uploaded_file = st.sidebar.file_uploader("", type="csv")
+    with st.sidebar.container():
+        st.title("📂 Carga tus stonks")
+        uploaded_file = st.file_uploader("", type="csv")
 
-    if uploaded_file is not None:
-        try:
-            # Validación básica del archivo
-            df = pd.read_csv(uploaded_file)  # Cargar el archivo
-            st.session_state.uploaded_file = uploaded_file
-            st.session_state.df = df  # Guardar el DataFrame en session_state
-            st.session_state.file_uploaded = True
-            st.sidebar.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+        if uploaded_file is not None:
+            try:
+                # Validación básica del archivo
+                df = pd.read_csv(uploaded_file)  # Cargar el archivo
+                st.session_state.uploaded_file = uploaded_file
+                st.session_state.df = df  # Guardar el DataFrame en session_state
+                st.session_state.file_uploaded = True
+                st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+                # Forzar la recarga de la app
+                st.rerun()
 
-        except Exception as e:
-            st.sidebar.error(f"❌ Error al cargar el archivo: {e}")
-else:
-    # Si ya se cargó, recuperar el DataFrame de session_state y ocultar el cargador
-    st.sidebar.title("🐸 Stonks")
-    df = st.session_state.df
+            except Exception as e:
+                st.error(f"❌ Error al cargar el archivo: {e}")
 
+#Elementos del menú lateral
 menu1 = "📊 Resumen"
 menu2 = "📈 Visualizaciones"
 menu3 = "📋 Datos Cargados"
@@ -644,26 +747,35 @@ menu5 = "📉 Análisis SP500"
 
 # Configuración de las opciones del menú según el estado de carga del CSV
 if st.session_state.file_uploaded:
+    # Si ya se cargó, recuperar el DataFrame de session_state y ocultar el cargador
+    st.sidebar.title("🐸 Stonks")
+    df = st.session_state.df
     opciones_menu = [
         menu1,
         menu2,
         menu3,
         menu4,
-        menu5,
+        menu5
     ]
     df = load_data(st.session_state.uploaded_file)
     df['FECHA'] = pd.to_datetime(df['FECHA'])
     results = analyze_investments(df)
+    # Crear el menú lateral
+    menu = st.sidebar.radio("", opciones_menu, label_visibility="collapsed")
 else:
-    opciones_menu = [menu4, menu5]
-
-# Crear el menú lateral
-menu = st.sidebar.radio("", opciones_menu)
+    opciones_menu = [
+        menu4,
+        menu5
+    ]
+    # Crear el menú lateral
+    menu = st.sidebar.radio("", opciones_menu, label_visibility="collapsed")
 
 # Forzar la redirección al actualizar los parámetros de consulta
+# Forzar la redirección al actualizar los parámetros de consulta
 if not st.session_state.file_uploaded:
-    st.experimental_set_query_params(file_uploaded=str(st.session_state.file_uploaded))
-
+    query_params = st.query_params.to_dict()
+    query_params["file_uploaded"] = str(st.session_state.file_uploaded)
+    st.query_params.update(query_params)
 
 
 # Condiciones para las pestañas
@@ -850,7 +962,7 @@ if menu == menu3 and st.session_state.file_uploaded:
     styled_subheader('Información de Empresas')
     company_data = []
     for ticker in df['TICKER'].unique():
-        # Excluir el ticker "NVDA"
+        # Excluir el ticker del
         if ticker == "0P0000IKFS.F":
             continue
 
@@ -908,78 +1020,6 @@ if menu == menu3 and st.session_state.file_uploaded:
     # Mostrar los datos cargados como un dataframe en Streamlit
     st.dataframe(df_to_display, use_container_width=True, hide_index=True)
 
-
-
-# Custom CSS para mejorar la apariencia (incluye color blanco de fono de aplicación)
-st.markdown("""
-<style>
-    /* Estilos generales */
-    .stApp {
-        background-color: #ffffff !important;
-    }
-    
-    /* Estilo para las métricas */
-    .metric-card {
-        background-color: white;
-        padding: 1.5rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-        margin: 0.5rem 0;
-        transition: transform 0.2s ease;
-    }
-    .metric-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .metric-label {
-        color: #64748b;
-        font-size: 0.875rem;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-    }
-    .metric-value {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-    }
-    
-    /* Estilos para la tabla */
-    .styled-table {
-        width: 100%;
-        border-collapse: separate;
-        border-spacing: 0;
-        margin: 1rem 0;
-        background-color: white;
-        border-radius: 0.5rem;
-        overflow: hidden;
-    }
-    .styled-table thead th {
-        background-color: #f1f5f9;
-        color: #475569;
-        font-weight: 600;
-        padding: 0.75rem 1rem;
-        text-align: left;
-    }
-    .styled-table tbody td {
-        padding: 0.75rem 1rem;
-        border-top: 1px solid #e2e8f0;
-    }
-    
-    /* Estilos para los indicadores */
-    .indicator-green {
-        background-color: #dcfce7;
-        color: #166534;
-    }
-    .indicator-yellow {
-        background-color: #fef9c3;
-        color: #854d0e;
-    }
-    .indicator-red {
-        background-color: #fee2e2;
-        color: #991b1b;
-    }
-</style>
-""", unsafe_allow_html=True)
 
 if menu == menu4:
     styled_subheader("📒 Elección de empresa")
@@ -1107,8 +1147,9 @@ if menu == menu4:
                     st.plotly_chart(fig, use_container_width=True)
                     
                     styled_subheader("📈 Decisión sobre Cashflows")
-                    metric_cols = st.columns(len(main_cashflows))
-                    for idx, column in enumerate(cashflow_data.columns):
+                    metric_cols = st.columns(4)  # Volvemos a 4 columnas
+
+                    for idx, column in enumerate(main_cashflows):
                         with metric_cols[idx]:
                             last_value = cashflow_data[column].iloc[-1]
                             prev_value = cashflow_data[column].iloc[-2]
@@ -1122,15 +1163,16 @@ if menu == menu4:
                             else:
                                 card_color = "background-color: #f1f5f9; color: #333;"  # Default color for Free Cash Flow
 
-                            # Crear tarjeta con porcentaje más grande
+                            # Usamos un div con una clase para forzar la altura
                             st.markdown(f"""
-                                <div style="{card_color} padding: 10px; border-radius: 5px; text-align: center;">
-                                    <h4 style="margin: 0;">{column.replace("Cash Flow", "CF")}</h4>
-                                    <p style="margin: 0; font-size: 32px; font-weight: bold;">{change:+.1f}%</p>
-                                    <p style="margin: 0; font-size: 20px;">${last_value:,.0f}M</p>
+                                <div class="card-container">
+                                    <div style="{card_color} padding: 10px; border-radius: 5px; text-align: center;" class="card-content">
+                                        <h4 style="margin: 0;">{column.replace("Cash Flow", "CF")}</h4>
+                                        <p style="margin: 0; font-size: 32px; font-weight: bold;">{change:+.1f}%</p>
+                                        <p style="margin: 0; font-size: 20px;">${last_value:,.0f}M</p>
+                                    </div>
                                 </div>
                             """, unsafe_allow_html=True)
-
                 else:
                     st.warning("No hay datos de flujo de efectivo disponibles para este stock.")
             except Exception as e:
