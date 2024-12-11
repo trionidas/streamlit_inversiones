@@ -717,9 +717,10 @@ if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
+    st.session_state.show_uploader = True  # Variable para controlar la visibilidad del uploader
 
-# Mostrar el cargador solo si no se ha cargado un archivo
-if not st.session_state.file_uploaded:
+# Mostrar el cargador solo si no se ha cargado un archivo y la variable de estado lo permite
+if st.session_state.show_uploader:
     with st.sidebar.container():
         st.title("📂 Carga tus stonks")
         uploaded_file = st.file_uploader("", type="csv")
@@ -731,9 +732,8 @@ if not st.session_state.file_uploaded:
                 st.session_state.uploaded_file = uploaded_file
                 st.session_state.df = df  # Guardar el DataFrame en session_state
                 st.session_state.file_uploaded = True
+                st.session_state.show_uploader = False  # Ocultar el uploader
                 st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
-                # Forzar la recarga de la app
-                st.rerun()
 
             except Exception as e:
                 st.error(f"❌ Error al cargar el archivo: {e}")
