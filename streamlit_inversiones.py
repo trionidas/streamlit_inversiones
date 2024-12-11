@@ -712,31 +712,36 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
+    st.session_state.dummy_counter = 0  # Variable para forzar la actualización del sidebar
 
 # Mostrar el cargador solo si no se ha cargado un archivo
 if not st.session_state.file_uploaded:
     with st.sidebar.container():
-        uploaded_file = st.file_uploader("", type="csv")
         st.title("📂 Carga tus stonks")
+        uploaded_file = st.file_uploader("", type="csv")
+
         if uploaded_file is not None:
             try:
                 # Validación básica del archivo
-                df = pd.read_csv(uploaded_file)  # Cargar el archivo
+                df = pd.read_csv(uploaded_file)
                 st.session_state.uploaded_file = uploaded_file
-                st.session_state.df = df  # Guardar el DataFrame en session_state
+                st.session_state.df = df
                 st.session_state.file_uploaded = True
-                st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+                st.success("✔️ Archivo cargado exitosamente. Menú habilitado.", icon="✅")
 
+                # Forzar la actualización del sidebar
+                st.session_state.dummy_counter += 1
 
             except Exception as e:
                 st.error(f"❌ Error al cargar el archivo: {e}")
 
-#Elementos del menú lateral
+# Elementos del menú lateral
 menu1 = "📊 Resumen"
 menu2 = "📈 Visualizaciones"
 menu3 = "📋 Datos Cargados"
@@ -745,36 +750,20 @@ menu5 = "📉 Análisis SP500"
 
 # Configuración de las opciones del menú según el estado de carga del CSV
 if st.session_state.file_uploaded:
-    # Si ya se cargó, recuperar el DataFrame de session_state y ocultar el cargador
-    st.sidebar.title("🐸 Stonks")
-    df = st.session_state.df
-    opciones_menu = [
-        menu1,
-        menu2,
-        menu3,
-        menu4,
-        menu5
-    ]
-    df = load_data(st.session_state.uploaded_file)
-    df['FECHA'] = pd.to_datetime(df['FECHA'])
-    results = analyze_investments(df)
-    # Crear el menú lateral
-    menu = st.sidebar.radio("", opciones_menu, label_visibility="collapsed")
+    with st.sidebar:
+        st.title("🐸 Stonks")
+        # Actualizar el sidebar con un elemento que dependa de la variable de estado
+        st.write(st.session_state.dummy_counter)
+        df = st.session_state.df
+        opciones_menu = [menu1, menu2, menu3, menu4, menu5]
+        df = load_data(st.session_state.uploaded_file)
+        df['FECHA'] = pd.to_datetime(df['FECHA'])
+        results = analyze_investments(df)
+        menu = st.radio("", opciones_menu, label_visibility="collapsed")
 else:
-    opciones_menu = [
-        menu4,
-        menu5
-    ]
-    # Crear el menú lateral
-    menu = st.sidebar.radio("", opciones_menu, label_visibility="collapsed")
-
-# Forzar la redirección al actualizar los parámetros de consulta
-# Forzar la redirección al actualizar los parámetros de consulta
-if not st.session_state.file_uploaded:
-    query_params = st.query_params.to_dict()
-    query_params["file_uploaded"] = str(st.session_state.file_uploaded)
-    st.query_params.update(query_params)
-
+    with st.sidebar:
+      opciones_menu = [menu4, menu5]
+      menu = st.radio("", opciones_menu, label_visibility="collapsed")
 
 # Condiciones para las pestañas
 if menu == menu1 and st.session_state.file_uploaded:
