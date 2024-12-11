@@ -741,7 +741,7 @@ if not st.session_state.file_uploaded:
                 st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
                 
                 # No usar st.rerun() aquí
-                st.experimental_rerun()  # Alternativa recomendada
+                st.rerun()  # Alternativa recomendada
 
             except Exception as e:
                 st.error(f"❌ Error al cargar el archivo: {e}")
