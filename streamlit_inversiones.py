@@ -732,8 +732,7 @@ if not st.session_state.file_uploaded:
                 st.session_state.df = df  # Guardar el DataFrame en session_state
                 st.session_state.file_uploaded = True
                 st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
-                # Forzar la recarga de la app
-                st.rerun()
+
 
             except Exception as e:
                 st.error(f"❌ Error al cargar el archivo: {e}")
