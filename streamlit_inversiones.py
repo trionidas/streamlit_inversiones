@@ -712,6 +712,7 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
 # Inicializar el estado de la sesión si es necesario
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
@@ -729,7 +730,7 @@ menu5 = "📉 Análisis SP500"
 if not st.session_state.file_uploaded:
     with st.sidebar.container():
         st.title("📂 Carga tus stonks")
-        uploaded_file = st.file_uploader("", type="csv")
+        uploaded_file = st.file_uploader("", type="csv", key="file_uploader")
 
         if uploaded_file is not None:
             try:
@@ -740,8 +741,8 @@ if not st.session_state.file_uploaded:
                 st.session_state.file_uploaded = True
                 st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
                 
-                # No usar st.rerun() aquí
-                st.rerun()  # Alternativa recomendada
+                # Eliminar el cargador de archivos del estado
+                del st.session_state.file_uploader
 
             except Exception as e:
                 st.error(f"❌ Error al cargar el archivo: {e}")
@@ -750,7 +751,7 @@ if not st.session_state.file_uploaded:
 if st.session_state.file_uploaded:
     # Si ya se cargó, recuperar el DataFrame de session_state
     st.sidebar.title("🐸 Stonks")
-    df = st.session_state.df
+    
     opciones_menu = [
         menu1,
         menu2,
@@ -758,9 +759,14 @@ if st.session_state.file_uploaded:
         menu4,
         menu5
     ]
-    df = load_data(st.session_state.uploaded_file)
-    df['FECHA'] = pd.to_datetime(df['FECHA'])
-    results = analyze_investments(df)
+    
+    # Asegúrate de que solo cargas el DataFrame una vez
+    if 'processed_df' not in st.session_state:
+        df = load_data(st.session_state.uploaded_file)
+        df['FECHA'] = pd.to_datetime(df['FECHA'])
+        st.session_state.processed_df = df
+        st.session_state.results = analyze_investments(df)
+    
     # Crear el menú lateral
     menu = st.sidebar.radio("", opciones_menu, label_visibility="collapsed")
 else:
