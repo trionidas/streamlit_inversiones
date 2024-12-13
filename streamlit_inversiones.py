@@ -558,16 +558,128 @@ def get_stock_info(ticker: str) -> dict:
         st.error(f"Error al obtener la información del stock: {str(e)}")
         return {}
 
-# Function to determine background color based on thresholds, útil para el análisis de stocks (PE PBV, etc)
 def get_bg_color(value, thresholds):
-    if value is None or value == "N/A":
+    if value == "N/A":
         return "background-color: gray;"
-    elif value < thresholds[0]:
-        return "background-color: green; color: white;"
-    elif thresholds[0] <= value <= thresholds[1]:
-        return "background-color: yellow; color: black;"
+    elif not thresholds:
+        return ""
+    elif thresholds.get('inverse', False):
+        if 'blue' in thresholds and value < thresholds['blue']:
+            return "background-color: #2563eb; color: white;" # Azul
+        elif value < thresholds['green']:
+            return "background-color: #dcfce7; color: #166534;"  # Verde
+        elif 'yellow' in thresholds and value < thresholds['yellow']:
+            return "background-color: #fef9c3; color: #854d0e;"  # Amarillo
+        else:
+            return "background-color: #fee2e2; color: #991b1b;"  # Rojo
     else:
-        return "background-color: red; color: white;"
+        if value > thresholds['green']:
+            return "background-color: #dcfce7; color: #166534;"  # Verde
+        elif 'yellow' in thresholds and value > thresholds['yellow']:
+            return "background-color: #fef9c3; color: #854d0e;"  # Amarillo
+        else:
+            return "background-color: #fee2e2; color: #991b1b;"  # Rojo
+
+@st.cache_data           
+def analyze_multiple_companies(tickers):
+    data = []
+    for ticker in tickers:
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            cashflow = stock.quarterly_cashflow
+
+            # Obtener la variación del CF respecto al trimestre anterior
+            operating_cf_change = "N/A"
+            investing_cf_change = "N/A"
+            financing_cf_change = "N/A"
+            if not cashflow.empty and cashflow.shape[1] >= 2:
+                operating_cf_change = (
+                    (
+                        cashflow.loc["Operating Cash Flow", cashflow.columns[0]]
+                        - cashflow.loc["Operating Cash Flow", cashflow.columns[1]]
+                    )
+                    / abs(cashflow.loc["Operating Cash Flow", cashflow.columns[1]])
+                ) * 100 if cashflow.loc["Operating Cash Flow", cashflow.columns[1]] != 0 else 0
+                investing_cf_change = (
+                    (
+                        cashflow.loc["Investing Cash Flow", cashflow.columns[0]]
+                        - cashflow.loc["Investing Cash Flow", cashflow.columns[1]]
+                    )
+                    / abs(cashflow.loc["Investing Cash Flow", cashflow.columns[1]])
+                ) * 100 if cashflow.loc["Investing Cash Flow", cashflow.columns[1]] != 0 else 0
+                financing_cf_change = (
+                    (
+                        cashflow.loc["Financing Cash Flow", cashflow.columns[0]]
+                        - cashflow.loc["Financing Cash Flow", cashflow.columns[1]]
+                    )
+                    / abs(cashflow.loc["Financing Cash Flow", cashflow.columns[1]])
+                ) * 100 if cashflow.loc["Financing Cash Flow", cashflow.columns[1]] != 0 else 0
+
+            # Multiplicar ROE por 100 al momento de recopilar los datos
+            data.append(
+                {
+                    "Ticker": ticker,
+                    "MarketCap(B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
+                    "ROE(%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
+                    "Debt/Equity": info.get("debtToEquity", "N/A"),
+                    "Current Ratio": info.get("currentRatio", "N/A"),
+                    "PE": info.get("trailingPE", "N/A"),
+                    "PBV": info.get("priceToBook", "N/A"),
+                    "OCF(%Var)": operating_cf_change,
+                    "ICF(%Var)": investing_cf_change,
+                    "FCF(%Var)": financing_cf_change,
+                }
+            )
+        except Exception as e:
+            st.error(f"Error al obtener datos para {ticker}: {str(e)}")
+            data.append(
+                {
+                    "Ticker": ticker,
+                    "MarketCap(B)": "N/A",
+                    "ROE(%)": "N/A",
+                    "Debt/Equity": "N/A",
+                    "Current Ratio": "N/A",
+                    "PE": "N/A",
+                    "PBV": "N/A",
+                    "OCF(%Var)": "N/A",
+                    "ICF(%Var)": "N/A",
+                    "FCF(%Var)": "N/A",
+                }
+            )
+
+    # Crear DataFrame con los nombres correctos
+    df = pd.DataFrame(data)
+
+    # Definir umbrales
+    thresholds = {
+        "MarketCap(B)": {"green": 10, "yellow": 5},
+        "ROE(%)": {"green": 8, "yellow": 7},
+        "Debt/Equity": {"blue": 0.6, "green": 1, "yellow": 2, "inverse": True},
+        "Current Ratio": {"green": 1.5, "yellow": 1},
+        "PE": {"green": 15, "yellow": 30, "inverse": True},
+        "PBV": {"green": 1.5, "yellow": 4.5, "inverse": True},
+        "OCF(%Var)": {"green": 0, "yellow": -5},
+        "ICF(%Var)": {"green": 0, "yellow": 5, "inverse": True},
+        "FCF(%Var)": {"green": 0, "yellow": 5, "inverse": True},
+    }
+
+    def style_df(df, thresholds):
+        styled_df = df.style.apply(
+            lambda col: [
+                get_bg_color(val, thresholds.get(col.name, {})) for val in col
+            ],
+            axis=0,
+        )
+        return styled_df
+
+    # Aplicar estilos
+    styled_df = style_df(df, thresholds)
+
+    # Redondear a 2 decimales después de aplicar los estilos
+    styled_df = styled_df.format(precision=2)
+
+    return styled_df
 
 # Function to display a styled subheader
 def styled_subheader(text):
@@ -724,6 +836,7 @@ menu2 = "📈 Visualizaciones"
 menu3 = "📋 Datos Cargados"
 menu4 = "🏢 Análisis Empresas"
 menu5 = "📉 Análisis SP500"
+menu6 = "📈 Análisis Multi-Empresa"
 
 # Sidebar content
 with st.sidebar:
@@ -742,13 +855,13 @@ with st.sidebar:
     if st.session_state.file_uploaded:
         st.title("🐸 Stonks")
         df = st.session_state.df
-        opciones_menu = [menu1, menu2, menu3, menu4, menu5]
+        opciones_menu = [menu1, menu2, menu3, menu4, menu5, menu6]
         df = load_data(st.session_state.uploaded_file)
         df['FECHA'] = pd.to_datetime(df['FECHA'])
         results = analyze_investments(df)
         menu = st.radio("", opciones_menu, label_visibility="collapsed")
     else:
-        opciones_menu = [menu4, menu5]
+        opciones_menu = [menu4, menu5, menu6]
         menu = st.radio("", opciones_menu, label_visibility="collapsed")
 
 # Condiciones para las pestañas
@@ -1302,4 +1415,10 @@ if menu == menu5:
         """,
         unsafe_allow_html=True
     )
-
+if menu == menu6:
+    styled_subheader("Análisis Multi-Empresa")
+    sp500_tickers = ['AAPL', 'NVDA', 'MSFT', 'AMZN', 'GOOGL', 'GOOG', 'META', 'TSLA', 'AVGO', 'WMT', 'LLY', 'JPM', 'V', 'UNH', 'ORCL', 'MA', 'XOM', 'COST', 'HD', 'PG', 'NFLX', 'JNJ', 'BAC', 'CRM', 'ABBV', 'CVX', 'KO', 'TMUS', 'MRK', 'WFC', 'ADBE', 'CSCO', 'BX', 'NOW', 'ACN', 'PEP', 'AXP', 'IBM', 'MCD', 'LIN', 'MS', 'DIS', 'TMO', 'AMD', 'ABT', 'PM', 'ISRG', 'CAT', 'GS', 'GE', 'INTU', 'VZ', 'QCOM', 'TXN', 'BKNG', 'DHR', 'T', 'PLTR', 'BLK', 'RTX', 'SPGI', 'NEE', 'CMCSA', 'LOW', 'PGR', 'HON', 'AMGN', 'PFE', 'KKR', 'SCHW', 'UNP', 'SYK', 'ETN', 'TJX', 'AMAT', 'ANET', 'C', 'COP', 'BSX', 'PANW', 'UBER', 'BA', 'DE', 'ADP', 'VRTX', 'LMT', 'MU', 'FI', 'NKE', 'GILD', 'BMY', 'CB', 'SBUX', 'UPS', 'ADI', 'MDT', 'MMC', 'PLD', 'LRCX', 'GEV', 'EQIX', 'AMT', 'MO', 'SHW', 'PYPL', 'SO', 'ELV', 'ICE', 'TT', 'CRWD', 'MCO', 'APH', 'KLAC', 'CMG', 'INTC', 'PH', 'WM', 'CTAS', 'CME', 'DUK', 'REGN', 'MDLZ', 'CDNS', 'ABNB', 'CI', 'DELL', 'HCA', 'MAR', 'WELL', 'ZTS', 'ITW', 'PNC', 'USB', 'MSI', 'AON', 'SNPS', 'CL', 'FTNT', 'CEG', 'EMR', 'ORLY', 'MCK', 'GD', 'EOG', 'AJG', 'COF', 'TDG', 'ECL', 'MMM', 'NOC', 'APD', 'FDX', 'SPG', 'RCL', 'WMB', 'CARR', 'RSG', 'ADSK', 'BDX', 'CVS', 'CSX', 'DLR', 'HLT', 'TGT', 'FCX', 'PCAR', 'TFC', 'OKE', 'KMI', 'CPRT', 'ROP', 'AFL', 'SLB', 'GM', 'MET', 'BK', 'AZO', 'SRE', 'TRV', 'PSA', 'NSC', 'GWW', 'NXPI', 'JCI', 'CHTR', 'AMP', 'FICO', 'ALL', 'URI', 'MNST', 'PSX', 'ROST', 'PAYX', 'CMI', 'AEP', 'AXON', 'PWR', 'VST', 'MSCI', 'MPC']
+    
+    # Aplicar estilos y mostrar el DataFrame
+    styled_df = analyze_multiple_companies(sp500_tickers)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True, height=2500)
