@@ -580,8 +580,8 @@ def get_bg_color(value, thresholds):
         else:
             return "background-color: #fee2e2; color: #991b1b;"  # Rojo
 
-@st.cache_data           
-def analyze_multiple_companies(tickers):
+@st.cache_data
+def get_data_for_multiple_companies(tickers):
     data = []
     for ticker in tickers:
         try:
@@ -620,15 +620,15 @@ def analyze_multiple_companies(tickers):
             data.append(
                 {
                     "Ticker": ticker,
-                    "MarketCap(B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
-                    "ROE(%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
+                    "Market Cap (B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
+                    "ROE (%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
                     "Debt/Equity": info.get("debtToEquity", "N/A"),
                     "Current Ratio": info.get("currentRatio", "N/A"),
-                    "PE": info.get("trailingPE", "N/A"),
-                    "PBV": info.get("priceToBook", "N/A"),
-                    "OCF(%Var)": operating_cf_change,
-                    "ICF(%Var)": investing_cf_change,
-                    "FCF(%Var)": financing_cf_change,
+                    "PE Ratio": info.get("trailingPE", "N/A"),
+                    "PBV Ratio": info.get("priceToBook", "N/A"),
+                    "Operating CF (Var) (%)": operating_cf_change,
+                    "Investing CF (Var) (%)": investing_cf_change,
+                    "Financing CF (Var) (%)": financing_cf_change,
                 }
             )
         except Exception as e:
@@ -636,32 +636,34 @@ def analyze_multiple_companies(tickers):
             data.append(
                 {
                     "Ticker": ticker,
-                    "MarketCap(B)": "N/A",
-                    "ROE(%)": "N/A",
+                    "Market Cap (B)": "N/A",
+                    "ROE (%)": "N/A",
                     "Debt/Equity": "N/A",
                     "Current Ratio": "N/A",
-                    "PE": "N/A",
-                    "PBV": "N/A",
-                    "OCF(%Var)": "N/A",
-                    "ICF(%Var)": "N/A",
-                    "FCF(%Var)": "N/A",
+                    "PE Ratio": "N/A",
+                    "PBV Ratio": "N/A",
+                    "Operating CF (Var) (%)": "N/A",
+                    "Investing CF (Var) (%)": "N/A",
+                    "Financing CF (Var) (%)": "N/A",
                 }
             )
 
-    # Crear DataFrame con los nombres correctos
-    df = pd.DataFrame(data)
+    return pd.DataFrame(data)
+
+def analyze_multiple_companies(tickers):
+    df = get_data_for_multiple_companies(tickers)
 
     # Definir umbrales
     thresholds = {
-        "MarketCap(B)": {"green": 10, "yellow": 5},
-        "ROE(%)": {"green": 8, "yellow": 7},
+        "Market Cap (B)": {"green": 10, "yellow": 5},
+        "ROE (%)": {"green": 8, "yellow": 7},
         "Debt/Equity": {"blue": 0.6, "green": 1, "yellow": 2, "inverse": True},
         "Current Ratio": {"green": 1.5, "yellow": 1},
-        "PE": {"green": 15, "yellow": 30, "inverse": True},
-        "PBV": {"green": 1.5, "yellow": 4.5, "inverse": True},
-        "OCF(%Var)": {"green": 0, "yellow": -5},
-        "ICF(%Var)": {"green": 0, "yellow": 5, "inverse": True},
-        "FCF(%Var)": {"green": 0, "yellow": 5, "inverse": True},
+        "PE Ratio": {"green": 15, "yellow": 30, "inverse": True},
+        "PBV Ratio": {"green": 1.5, "yellow": 4.5, "inverse": True},
+        "Operating CF (Var) (%)": {"green": 0, "yellow": -5},
+        "Investing CF (Var) (%)": {"green": 0, "yellow": 5, "inverse": True},
+        "Financing CF (Var) (%)": {"green": 0, "yellow": 5, "inverse": True},
     }
 
     def style_df(df, thresholds):
@@ -680,7 +682,6 @@ def analyze_multiple_companies(tickers):
     styled_df = styled_df.format(precision=2)
 
     return styled_df
-
 # Function to display a styled subheader
 def styled_subheader(text):
     st.markdown(
