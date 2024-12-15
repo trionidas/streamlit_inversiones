@@ -1060,17 +1060,20 @@ def get_stock_info(ticker: str) -> dict:
 def get_bg_color(value, thresholds, inverse=False):
     if value is None or value == "N/A":
         return "background-color: gray;"
-    elif inverse:
+    elif not thresholds:
+        return ""  # No hay umbrales definidos, no aplicar color
+
+    if inverse:
         if 'blue' in thresholds and value < thresholds['blue']:
             return "background-color: #cce0f5; color: #084594;"  # Azul
-        elif value < thresholds['green']:
+        elif 'green' in thresholds and value < thresholds['green']:
             return "background-color: #dcfce7; color: #166534;"  # Verde
         elif 'yellow' in thresholds and value < thresholds['yellow']:
             return "background-color: #fef9c3; color: #854d0e;"  # Amarillo
         else:
             return "background-color: #fee2e2; color: #991b1b;"  # Rojo
     else:
-        if value > thresholds['green']:
+        if 'green' in thresholds and value > thresholds['green']:
             return "background-color: #dcfce7; color: #166534;"  # Verde
         elif 'yellow' in thresholds and value > thresholds['yellow']:
             return "background-color: #fef9c3; color: #854d0e;"  # Amarillo
@@ -1165,7 +1168,12 @@ def analyze_multiple_companies(tickers):
     def style_df(df, thresholds):
         styled_df = df.style.apply(
             lambda col: [
-                get_bg_color(val, thresholds.get(col.name, {})) for val in col
+                get_bg_color(
+                    val,
+                    thresholds.get(col.name, {}),
+                    inverse=thresholds.get(col.name, {}).get("inverse", False),
+                )
+                for val in col
             ],
             axis=0,
         )
