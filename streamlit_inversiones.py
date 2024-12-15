@@ -10,8 +10,504 @@ import re
 import numpy as np
 from typing import Optional
 from streamlit_extras.app_logo import add_logo
+from st_aggrid import AgGrid, GridOptionsBuilder
 
+sp500_ticker_to_name = {
+    "MMM": "3M Company",
+    "AOS": "A. O. Smith Corporation",
+    "ABT": "Abbott Laboratories",
+    "ABBV": "AbbVie Inc.",
+    "ACN": "Accenture plc",
+    "ATVI": "Activision Blizzard, Inc.",
+    "ADM": "Archer-Daniels-Midland Company",
+    "ADBE": "Adobe Inc.",
+    "ADP": "Automatic Data Processing, Inc.",
+    "AAP": "Advance Auto Parts, Inc.",
+    "AES": "AES Corporation",
+    "AFL": "Aflac Incorporated",
+    "A": "Agilent Technologies, Inc.",
+    "APD": "Air Products and Chemicals, Inc.",
+    "AKAM": "Akamai Technologies, Inc.",
+    "ALK": "Alaska Air Group, Inc.",
+    "ALB": "Albemarle Corporation",
+    "ARE": "Alexandria Real Estate Equities, Inc.",
+    "ALGN": "Align Technology, Inc.",
+    "ALLE": "Allegion plc",
+    "LNT": "Alliant Energy Corporation",
+    "ALL": "Allstate Corporation",
+    "GOOGL": "Alphabet Inc.",
+    "GOOG": "Alphabet Inc.",
+    "MO": "Altria Group, Inc.",
+    "AMZN": "Amazon.com, Inc.",
+    "AMCR": "Amcor plc",
+    "AMD": "Advanced Micro Devices, Inc.",
+    "AME": "AMETEK, Inc.",
+    "AMGN": "Amgen Inc.",
+    "APH": "Amphenol Corporation",
+    "ADI": "Analog Devices, Inc.",
+    "ANSS": "ANSYS, Inc.",
+    "AON": "Aon plc",
+    "APA": "APA Corporation",
+    "AAPL": "Apple Inc.",
+    "AMAT": "Applied Materials, Inc.",
+    "APTV": "Aptiv PLC",
+    "ACGL": "Arch Capital Group Ltd.",
+    "ANET": "Arista Networks, Inc.",
+    "AJG": "Arthur J. Gallagher & Co.",
+    "AIZ": "Assurant, Inc.",
+    "T": "AT&T Inc.",
+    "ATO": "Atmos Energy Corporation",
+    "ADSK": "Autodesk, Inc.",
+    "AEE": "Ameren Corporation",
+    "AVB": "AvalonBay Communities, Inc.",
+    "AVY": "Avery Dennison Corporation",
+    "AXON": "Axon Enterprise, Inc.",
+    "AXP": "American Express Company",
+    "AVGO": "Broadcom Inc.",
+    "BKR": "Baker Hughes Company",
+    "BALL": "Ball Corporation",
+    "BAC": "Bank of America Corporation",
+    "BBWI": "Bath & Body Works, Inc.",
+    "BAX": "Baxter International Inc.",
+    "BDX": "Becton, Dickinson and Company",
+    "BRK.B": "Berkshire Hathaway Inc.",
+    "BBY": "Best Buy Co., Inc.",
+    "BIO": "Bio-Rad Laboratories, Inc.",
+    "TECH": "Bio-Techne Corporation",
+    "BIIB": "Biogen Inc.",
+    "BLK": "BlackRock, Inc.",
+    "BK": "The Bank of New York Mellon Corporation",
+    "BA": "Boeing Company",
+    "BKNG": "Booking Holdings Inc.",
+    "BWA": "BorgWarner Inc.",
+    "BXP": "Boston Properties, Inc.",
+    "BSX": "Boston Scientific Corporation",
+    "BMY": "Bristol-Myers Squibb Company",
+    "AVGO": "Broadcom Inc.",
+    "BR": "Broadridge Financial Solutions, Inc.",
+    "BF.B": "Brown-Forman Corporation",
+    "CHRW": "C.H. Robinson Worldwide, Inc.",
+    "CDNS": "Cadence Design Systems, Inc.",
+    "CZR": "Caesars Entertainment, Inc.",
+    "CPT": "Camden Property Trust",
+    "CPB": "Campbell Soup Company",
+    "COF": "Capital One Financial Corporation",
+    "CAH": "Cardinal Health, Inc.",
+    "KMX": "CarMax, Inc.",
+    "CCL": "Carnival Corporation & plc",
+    "CARR": "Carrier Global Corporation",
+    "CTLT": "Catalent, Inc.",
+    "CAT": "Caterpillar Inc.",
+    "CBOE": "Cboe Global Markets, Inc.",
+    "CBRE": "CBRE Group, Inc.",
+    "CDW": "CDW Corporation",
+    "CE": "Celanese Corporation",
+    "COR": "Cencora, Inc.",
+    "CNC": "Centene Corporation",
+    "CNP": "CenterPoint Energy, Inc.",
+    "CDAY": "Ceridian HCM Holding Inc.",
+    "CF": "CF Industries Holdings, Inc.",
+    "CRL": "Charles River Laboratories International, Inc.",
+    "SCHW": "Charles Schwab Corporation",
+    "CHTR": "Charter Communications, Inc.",
+    "CVX": "Chevron Corporation",
+    "CMG": "Chipotle Mexican Grill, Inc.",
+    "CB": "Chubb Limited",
+    "CHD": "Church & Dwight Co., Inc.",
+    "CI": "Cigna Corporation",
+    "CINF": "Cincinnati Financial Corporation",
+    "CTAS": "Cintas Corporation",
+    "CSCO": "Cisco Systems, Inc.",
+    "C": "Citigroup Inc.",
+    "CFG": "Citizens Financial Group, Inc.",
+    "CLX": "Clorox Company",
+    "CME": "CME Group Inc.",
+    "CMS": "CMS Energy Corporation",
+    "KO": "Coca-Cola Company",
+    "CTSH": "Cognizant Technology Solutions Corporation",
+    "CL": "Colgate-Palmolive Company",
+    "CMCSA": "Comcast Corporation",
+    "CMA": "Comerica Incorporated",
+    "CAG": "Conagra Brands, Inc.",
+    "COP": "ConocoPhillips",
+    "ED": "Consolidated Edison, Inc.",
+    "STZ": "Constellation Brands, Inc.",
+    "CEG": "Constellation Energy Corporation",
+    "COO": "CooperCompanies, Inc.",
+    "CPRT": "Copart, Inc.",
+    "GLW": "Corning Incorporated",
+    "CTVA": "Corteva, Inc.",
+    "CSGP": "CoStar Group, Inc.",
+    "COST": "Costco Wholesale Corporation",
+    "CTRA": "Coterra Energy Inc.",
+    "CCI": "Crown Castle Inc.",
+    "CSX": "CSX Corporation",
+    "CMI": "Cummins Inc.",
+    "CVS": "CVS Health Corporation",
+    "DHI": "D.R. Horton, Inc.",
+    "DHR": "Danaher Corporation",
+    "DRI": "Darden Restaurants, Inc.",
+    "DVA": "DaVita Inc.",
+    "DE": "Deere & Company",
+    "DAL": "Delta Air Lines, Inc.",
+    "XRAY": "Dentsply Sirona Inc.",
+    "DVN": "Devon Energy Corporation",
+    "DXCM": "Dexcom, Inc.",
+    "FANG": "Diamondback Energy, Inc.",
+    "DLR": "Digital Realty Trust, Inc.",
+    "DFS": "Discover Financial Services",
+    "DIS": "Walt Disney Company",
+    "DG": "Dollar General Corporation",
+    "DLTR": "Dollar Tree, Inc.",
+    "D": "Dominion Energy, Inc.",
+    "DPZ": "Domino's Pizza, Inc.",
+    "DOV": "Dover Corporation",
+    "DOW": "Dow Inc.",
+    "DTE": "DTE Energy Company",
+    "DUK": "Duke Energy Corporation",
+    "DD": "DuPont de Nemours, Inc.",
+    "DXC": "DXC Technology Company",
+    "EMN": "Eastman Chemical Company",
+    "ETN": "Eaton Corporation plc",
+    "EBAY": "eBay Inc.",
+    "ECL": "Ecolab Inc.",
+    "EIX": "Edison International",
+    "EW": "Edwards Lifesciences Corporation",
+    "EA": "Electronic Arts Inc.",
+    "ELV": "Elevance Health, Inc.",
+    "LLY": "Eli Lilly and Company",
+    "EMR": "Emerson Electric Co.",
+    "ENPH": "Enphase Energy, Inc.",
+    "ETR": "Entergy Corporation",
+    "EOG": "EOG Resources, Inc.",
+    "EPAM": "EPAM Systems, Inc.",
+    "EQT": "EQT Corporation",
+    "EFX": "Equifax Inc.",
+    "EQIX": "Equinix, Inc.",
+    "EQR": "Equity Residential",
+    "ESS": "Essex Property Trust, Inc.",
+    "EL": "Estée Lauder Companies Inc.",
+    "ETSY": "Etsy, Inc.",
+    "EG": "Everest Group, Ltd.",
+    "EVRG": "Evergy, Inc.",
+    "ES": "Eversource Energy",
+    "EXC": "Exelon Corporation",
+    "EXPE": "Expedia Group, Inc.",
+    "EXPD": "Expeditors International of Washington, Inc.",
+    "EXR": "Extra Space Storage Inc.",
+    "XOM": "Exxon Mobil Corporation",
+    "FFIV": "F5, Inc.",
+    "FDS": "FactSet Research Systems Inc.",
+    "FICO": "Fair Isaac Corporation",
+    "FAST": "Fastenal Company",
+    "FRT": "Federal Realty Investment Trust",
+    "FDX": "FedEx Corporation",
+    "FITB": "Fifth Third Bancorp",
+    "FSLR": "First Solar, Inc.",
+    "FE": "FirstEnergy Corp.",
+    "FIS": "Fidelity National Information Services, Inc.",
+    "FISV": "Fiserv, Inc.",
+    "FLT": "Fleetcor Technologies, Inc.",
+    "FMC": "FMC Corporation",
+    "F": "Ford Motor Company",
+    "FTNT": "Fortinet, Inc.",
+    "FTV": "Fortive Corporation",
+    "FOXA": "Fox Corporation",
+    "FOX": "Fox Corporation",
+    "BEN": "Franklin Resources, Inc.",
+    "FCX": "Freeport-McMoRan Inc.",
+    "FRO": "Frontline plc",
+    "GRMN": "Garmin Ltd.",
+    "IT": "Gartner, Inc.",
+    "GEHC": "GE HealthCare Technologies Inc.",
+    "GEN": "Gen Digital Inc.",
+    "GNRC": "Generac Holdings Inc.",
+    "GD": "General Dynamics Corporation",
+    "GE": "General Electric Company",
+    "GIS": "General Mills, Inc.",
+    "GM": "General Motors Company",
+    "GPC": "Genuine Parts Company",
+    "GILD": "Gilead Sciences, Inc.",
+    "GL": "Globe Life Inc.",
+    "GPN": "Global Payments Inc.",
+    "GS": "Goldman Sachs Group, Inc.",
+    "GWW": "W. W. Grainger, Inc.",
+    "HAL": "Halliburton Company",
+    "HBI": "Hanesbrands Inc.",
+    "HAS": "Hasbro, Inc.",
+    "HCA": "HCA Healthcare, Inc.",
+    "PEAK": "Healthpeak Properties, Inc.",
+    "HSIC": "Henry Schein, Inc.",
+    "HES": "Hess Corporation",
+    "HPE": "Hewlett Packard Enterprise Company",
+    "HLT": "Hilton Worldwide Holdings Inc.",
+    "HOLX": "Hologic, Inc.",
+    "HD": "Home Depot, Inc.",
+    "HON": "Honeywell International Inc.",
+    "HRL": "Hormel Foods Corporation",
+    "HST": "Host Hotels & Resorts, Inc.",
+    "HWM": "Howmet Aerospace Inc.",
+    "HPQ": "HP Inc.",
+    "HUBB": "Hubbell Incorporated",
+    "HUM": "Humana Inc.",
+    "HBAN": "Huntington Bancshares Incorporated",
+    "HII": "Huntington Ingalls Industries, Inc.",
+    "IBM": "International Business Machines Corporation",
+    "IEX": "IDEX Corporation",
+    "IDXX": "IDEXX Laboratories, Inc.",
+    "ITW": "Illinois Tool Works Inc.",
+    "ILMN": "Illumina, Inc.",
+    "INCY": "Incyte Corporation",
+    "IR": "Ingersoll Rand Inc.",
+    "INTC": "Intel Corporation",
+    "ICE": "Intercontinental Exchange, Inc.",
+    "IFF": "International Flavors & Fragrances Inc.",
+    "IP": "International Paper Company",
+    "IPG": "Interpublic Group of Companies, Inc.",
+    "INTU": "Intuit Inc.",
+    "ISRG": "Intuitive Surgical, Inc.",
+    "IVZ": "Invesco Ltd.",
+    "INVH": "Invitation Homes Inc.",
+    "IQV": "IQVIA Holdings Inc.",
+    "IRM": "Iron Mountain Incorporated",
+    "JBHT": "J.B. Hunt Transport Services, Inc.",
+    "JKHY": "Jack Henry & Associates, Inc.",
+    "J": "Jacobs Solutions Inc.",
+    "JNJ": "Johnson & Johnson",
+    "JCI": "Johnson Controls International plc",
+    "JPM": "JPMorgan Chase & Co.",
+    "JNPR": "Juniper Networks, Inc.",
+    "K": "Kellogg Company",
+    "KDP": "Keurig Dr Pepper Inc.",
+    "KEY": "KeyCorp",
+    "KEYS": "Keysight Technologies, Inc.",
+    "KMB": "Kimberly-Clark Corporation",
+    "KIM": "Kimco Realty Corporation",
+    "KMI": "Kinder Morgan, Inc.",
+    "KLAC": "KLA Corporation",
+    "KHC": "Kraft Heinz Company",
+    "KR": "Kroger Co.",
+    "LHX": "L3Harris Technologies, Inc.",
+    "LH": "Laboratory Corporation of America Holdings",
+    "LRCX": "Lam Research Corporation",
+    "LW": "Lamb Weston Holdings, Inc.",
+    "LVS": "Las Vegas Sands Corp.",
+    "LDOS": "Leidos Holdings, Inc.",
+    "LEN": "Lennar Corporation",
+    "LIN": "Linde plc",
+    "LYV": "Live Nation Entertainment, Inc.",
+    "LKQ": "LKQ Corporation",
+    "LMT": "Lockheed Martin Corporation",
+    "L": "Loews Corporation",
+    "LOW": "Lowe's Companies, Inc.",
+    "LYB": "LyondellBasell Industries N.V.",
+    "MTB": "M&T Bank Corporation",
+    "MRO": "Marathon Oil Corporation",
+    "MPC": "Marathon Petroleum Corporation",
+    "MKTX": "MarketAxess Holdings Inc.",
+    "MAR": "Marriott International, Inc.",
+    "MMC": "Marsh & McLennan Companies, Inc.",
+    "MLM": "Martin Marietta Materials, Inc.",
+    "MAS": "Masco Corporation",
+    "MTCH": "Match Group, Inc.",
+    "MKC": "McCormick & Company, Incorporated",
+    "MCD": "McDonald's Corporation",
+    "MCK": "McKesson Corporation",
+    "MDT": "Medtronic plc",
+    "MRK": "Merck & Co., Inc.",
+    "META": "Meta Platforms, Inc.",
+    "MET": "MetLife, Inc.",
+    "MTD": "Mettler-Toledo International Inc.",
+    "MGM": "MGM Resorts International",
+    "MCHP": "Microchip Technology Incorporated",
+    "MU": "Micron Technology, Inc.",
+    "MSFT": "Microsoft Corporation",
+    "MAA": "Mid-America Apartment Communities, Inc.",
+    "MRNA": "Moderna, Inc.",
+    "MHK": "Mohawk Industries, Inc.",
+    "MOH": "Molina Healthcare, Inc.",
+    "TAP": "Molson Coors Beverage Company",
+    "MDLZ": "Mondelez International, Inc.",
+    "MPWR": "Monolithic Power Systems, Inc.",
+    "MNST": "Monster Beverage Corporation",
+    "MCO": "Moody's Corporation",
+    "MS": "Morgan Stanley",
+    "MSI": "Motorola Solutions, Inc.",
+    "MSCI": "MSCI Inc.",
+    "NDAQ": "Nasdaq, Inc.",
+    "NTAP": "NetApp, Inc.",
+    "NFLX": "Netflix, Inc.",
+    "NWL": "Newell Brands Inc.",
+    "NEM": "Newmont Corporation",
+    "NWSA": "News Corporation",
+    "NWS": "News Corporation",
+    "NEE": "NextEra Energy, Inc.",
+    "NKE": "NIKE, Inc.",
+    "NI": "NiSource Inc.",
+    "NDSN": "Nordson Corporation",
+    "NSC": "Norfolk Southern Corporation",
+    "NTRS": "Northern Trust Corporation",
+    "NOC": "Northrop Grumman Corporation",
+    "NCLH": "Norwegian Cruise Line Holdings Ltd.",
+    "NRG": "NRG Energy, Inc.",
+    "NUE": "Nucor Corporation",
+    "NVDA": "NVIDIA Corporation",
+    "NVR": "NVR, Inc.",
+    "NXPI": "NXP Semiconductors N.V.",
+    "ORLY": "O'Reilly Automotive, Inc.",
+    "OXY": "Occidental Petroleum Corporation",
+    "ODFL": "Old Dominion Freight Line, Inc.",
+    "OMC": "Omnicom Group Inc.",
+    "ON": "ON Semiconductor Corporation",
+    "OKE": "ONEOK, Inc.",
+    "ORCL": "Oracle Corporation",
+    "OTIS": "Otis Worldwide Corporation",
+    "PCAR": "PACCAR Inc",
+    "PKG": "Packaging Corporation of America",
+    "PARA": "Paramount Global",
+    "PH": "Parker-Hannifin Corporation",
+    "PAYX": "Paychex, Inc.",
+    "PAYC": "Paycom Software, Inc.",
+    "PYPL": "PayPal Holdings, Inc.",
+    "PNR": "Pentair plc",
+    "PEP": "PepsiCo, Inc.",
+    "PFE": "Pfizer Inc.",
+    "PCG": "PG&E Corporation",
+    "PM": "Philip Morris International Inc.",
+    "PSX": "Phillips 66",
+    "PNW": "Pinnacle West Capital Corporation",
+    "PXD": "Pioneer Natural Resources Company",
+    "PNC": "PNC Financial Services Group, Inc.",
+    "POOL": "Pool Corporation",
+    "PPG": "PPG Industries, Inc.",
+    "PPL": "PPL Corporation",
+    "PFG": "Principal Financial Group, Inc.",
+    "PG": "Procter & Gamble Company",
+    "PGR": "Progressive Corporation",
+    "PLD": "Prologis, Inc.",
+    "PRU": "Prudential Financial, Inc.",
+    "PEG": "Public Service Enterprise Group Incorporated",
+    "PTC": "PTC Inc.",
+    "PSA": "Public Storage",
+    "PHM": "PulteGroup, Inc.",
+    "QRVO": "Qorvo, Inc.",
+    "PWR": "Quanta Services, Inc.",
+    "DGX": "Quest Diagnostics Incorporated",
+    "RL": "Ralph Lauren Corporation",
+    "RJF": "Raymond James Financial, Inc.",
+    "RTX": "Raytheon Technologies Corporation",
+    "O": "Realty Income Corporation",
+    "REG": "Regency Centers Corporation",
+    "REGN": "Regeneron Pharmaceuticals, Inc.",
+    "RF": "Regions Financial Corporation",
+    "RSG": "Republic Services, Inc.",
+    "RMD": "ResMed Inc.",
+    "RHI": "Robert Half Inc.",
+    "ROK": "Rockwell Automation, Inc.",
+    "ROL": "Rollins, Inc.",
+    "ROP": "Roper Technologies, Inc.",
+    "ROST": "Ross Stores, Inc.",
+    "RCL": "Royal Caribbean Cruises Ltd.",
+    "SPGI": "S&P Global Inc.",
+    "CRM": "Salesforce, Inc.",
+    "SBAC": "SBA Communications Corporation",
+    "SLB": "Schlumberger Limited",
+    "STX": "Seagate Technology Holdings plc",
+    "SEE": "Sealed Air Corporation",
+    "SRE": "Sempra",
+    "NOW": "ServiceNow, Inc.",
+    "SHW": "Sherwin-Williams Company",
+    "SPG": "Simon Property Group, Inc.",
+    "SWKS": "Skyworks Solutions, Inc.",
+    "SJM": "J.M. Smucker Company",
+    "SNA": "Snap-on Incorporated",
+    "SEDG": "SolarEdge Technologies, Inc.",
+    "SO": "Southern Company",
+    "LUV": "Southwest Airlines Co.",
+    "SWK": "Stanley Black & Decker, Inc.",
+    "SBUX": "Starbucks Corporation",
+    "STT": "State Street Corporation",
+    "STE": "STERIS plc",
+    "SYK": "Stryker Corporation",
+    "SIVB": "SVB Financial Group",
+    "SYF": "Synchrony Financial",
+    "SNPS": "Synopsys, Inc.",
+    "SYY": "Sysco Corporation",
+    "TMUS": "T-Mobile US, Inc.",
+    "TROW": "T. Rowe Price Group, Inc.",
+    "TTWO": "Take-Two Interactive Software, Inc.",
+    "TPR": "Tapestry, Inc.",
+    "TRGP": "Targa Resources Corp.",
+    "TGT": "Target Corporation",
+    "TEL": "TE Connectivity Ltd.",
+    "TDY": "Teledyne Technologies Incorporated",
+    "TFX": "Teleflex Incorporated",
+    "TER": "Teradyne, Inc.",
+    "TSLA": "Tesla, Inc.",
+    "TXN": "Texas Instruments Incorporated",
+    "TXT": "Textron Inc.",
+    "TMO": "Thermo Fisher Scientific Inc.",
+    "TJX": "TJX Companies, Inc.",
+    "TSCO": "Tractor Supply Company",
+    "TT": "Trane Technologies plc",
+    "TDG": "TransDigm Group Incorporated",
+    "TRV": "Travelers Companies, Inc.",
+    "TRMB": "Trimble Inc.",
+    "TFC": "Truist Financial Corporation",
+    "TYL": "Tyler Technologies, Inc.",
+    "TSN": "Tyson Foods, Inc.",
+    "USB": "U.S. Bancorp",
+    "UDR": "UDR, Inc.",
+    "ULTA": "Ulta Beauty, Inc.",
+    "UNP": "Union Pacific Corporation",
+    "UAL": "United Airlines Holdings, Inc.",
+    "UNH": "UnitedHealth Group Incorporated",
+    "UPS": "United Parcel Service, Inc.",
+    "URI": "United Rentals, Inc.",
+    "UHS": "Universal Health Services, Inc.",
+    "UNM": "Unum Group",
+    "VLO": "Valero Energy Corporation",
+    "VTR": "Ventas, Inc.",
+    "VRSN": "VeriSign, Inc.",
+    "VRSK": "Verisk Analytics, Inc.",
+    "VZ": "Verizon Communications Inc.",
+    "VRTX": "Vertex Pharmaceuticals Incorporated",
+    "VFC": "VF Corporation",
+    "VICI": "VICI Properties Inc.",
+    "V": "Visa Inc.",
+    "VNO": "Vornado Realty Trust",
+    "VMC": "Vulcan Materials Company",
+    "WRB": "W. R. Berkley Corporation",
+    "WAB": "Westinghouse Air Brake Technologies Corporation",
+    "WBA": "Walgreens Boots Alliance, Inc.",
+    "WMT": "Walmart Inc.",
+    "WBD": "Warner Bros. Discovery, Inc.",
+    "WM": "Waste Management, Inc.",
+    "WAT": "Waters Corporation",
+    "WEC": "WEC Energy Group, Inc.",
+    "WFC": "Wells Fargo & Company",
+    "WELL": "Welltower Inc.",
+    "WST": "West Pharmaceutical Services, Inc.",
+    "WDC": "Western Digital Corporation",
+    "WU": "Western Union Company",
+    "WRK": "WestRock Company",
+    "WY": "Weyerhaeuser Company",
+    "WHR": "Whirlpool Corporation",
+    "WMB": "Williams Companies, Inc.",
+    "WLTW": "Willis Towers Watson Public Limited Company",
+    "WYNN": "Wynn Resorts, Limited",
+    "XEL": "Xcel Energy Inc.",
+    "XYL": "Xylem Inc.",
+    "YUM": "Yum! Brands, Inc.",
+    "ZBRA": "Zebra Technologies Corporation",
+    "ZBH": "Zimmer Biomet Holdings, Inc.",
+    "ZION": "Zions Bancorporation, N.A.",
+    "ZTS": "Zoetis Inc."
+}
 
+# Crear los diccionarios inversos
+ticker_to_name = sp500_ticker_to_name
+name_to_ticker = {v: k for k, v in ticker_to_name.items()}
 
 def clean_number(x):
     if isinstance(x, str):
@@ -23,7 +519,7 @@ def clean_number(x):
 
 def load_data(uploaded_file):
     content = uploaded_file.getvalue().decode('utf-8')
-    df = pd.read_csv(io.StringIO(content), sep=';')
+    df = pd.read_csv(io.StringIO(content), sep=';', skipinitialspace=True)
     df['FECHA'] = pd.to_datetime(df['FECHA'], format='%d/%m/%Y')
     
     numeric_columns = ['VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMISION']
@@ -565,7 +1061,7 @@ def get_bg_color(value, thresholds):
         return ""
     elif thresholds.get('inverse', False):
         if 'blue' in thresholds and value < thresholds['blue']:
-            return "background-color: #2563eb; color: white;" # Azul
+            return "background-color: #cce0f5; color: #084594;"  # Azul más claro y texto más oscuro
         elif value < thresholds['green']:
             return "background-color: #dcfce7; color: #166534;"  # Verde
         elif 'yellow' in thresholds and value < thresholds['yellow']:
@@ -622,8 +1118,7 @@ def get_data_for_multiple_companies(tickers):
                     "Ticker": ticker,
                     "Market Cap (B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
                     "ROE (%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
-                    "Debt/Equity": info.get("debtToEquity", "N/A"),
-                    "Current Ratio": info.get("currentRatio", "N/A"),
+                    "Debt/Equity": round(info.get("debtToEquity", 0) / 100, 2) if info.get("debtToEquity") is not None else "N/A",                    "Current Ratio": info.get("currentRatio", "N/A"),
                     "PE Ratio": info.get("trailingPE", "N/A"),
                     "PBV Ratio": info.get("priceToBook", "N/A"),
                     "Operating CF (Var) (%)": operating_cf_change,
@@ -682,6 +1177,8 @@ def analyze_multiple_companies(tickers):
     styled_df = styled_df.format(precision=2)
 
     return styled_df
+
+
 # Function to display a styled subheader
 def styled_subheader(text):
     st.markdown(
@@ -1043,13 +1540,37 @@ if menu == menu2 and st.session_state.file_uploaded:
         else:
             st.info("Selecciona un ticker para ver su rendimiento.")
 
+import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder
+import pandas as pd
+
+# ... (resto de tus imports) ...
+
+# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
+
+import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder
+import pandas as pd
+
+# ... (resto de tus imports) ...
+
+# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
+
+import streamlit as st
+from st_aggrid import AgGrid, GridOptionsBuilder
+import pandas as pd
+
+# ... (resto de tus imports) ...
+
+# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
+
 if menu == menu3 and st.session_state.file_uploaded:
 
-    # Información de empresas
+    # --- Información de Empresas ---
     styled_subheader('Información de Empresas')
     company_data = []
     for ticker in df['TICKER'].unique():
-        # Excluir el ticker del
+        # Excluir el ticker del fondo
         if ticker == "0P0000IKFS.F":
             continue
 
@@ -1072,18 +1593,28 @@ if menu == menu3 and st.session_state.file_uploaded:
 
     company_info_df = pd.DataFrame(company_data)
 
-            # Ordenar por 'Próxima presentación de resultados' en orden ascendente
-    company_info_df = company_info_df.sort_values(by='Resultados', ascending=True)
+    # Configurar st-ag-grid para la tabla de Información de Empresas
+    gb = GridOptionsBuilder.from_dataframe(company_info_df)
+    gb.configure_pagination()
+    gb.configure_side_bar()
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
 
-    # Aplicar estilo a la columna 'Ticker' para mostrarla en azul usando pandas Styler
-    company_info_df = company_info_df.style.applymap(
-        lambda x: 'color: blue; font-weight: bold;',
-        subset=['Ticker']
+    # Aplicar estilo a la columna 'Ticker'
+    gb.configure_column("Ticker", header_name="Ticker", cellStyle={'color': 'blue', 'font-weight': 'bold'})
+
+    gridOptions = gb.build()
+
+    AgGrid(
+        company_info_df,
+        gridOptions=gridOptions,
+        height=350,
+        width='100%',
+        fit_columns_on_grid_load=True,
+        allow_unsafe_jscode=True,
+        enable_quicksearch=True
     )
-    
-    # Mostrar la información de empresas como un dataframe en Streamlit
-    st.dataframe(company_info_df, use_container_width=True, hide_index=True)
 
+    # --- Datos Cargados ---
     styled_subheader('Datos Cargados')
 
     # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
@@ -1097,27 +1628,54 @@ if menu == menu3 and st.session_state.file_uploaded:
     df_to_display['PRECIO_ACCION'] = df_to_display['PRECIO_ACCION'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
     df_to_display['PRECIO_OPERACION_EUR'] = df_to_display['PRECIO_OPERACION_EUR'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
 
-    # Aplicar estilo a las columnas 'Ticker' y 'TIPO_OP'
-    df_to_display = df_to_display.style.applymap(
-        lambda x: 'color: blue; font-weight: bold;', subset=['TICKER']
-    ).applymap(
-        lambda x: 'color: green; font-weight: bold;' if x == 'BUY' else '', subset=['TIPO_OP']
+    # Configurar st-ag-grid para la tabla de Datos Cargados
+    gb = GridOptionsBuilder.from_dataframe(df_to_display)
+    gb.configure_pagination()
+    gb.configure_side_bar()
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
+
+    # Aplicar estilos a las columnas 'Ticker' y 'TIPO_OP'
+    gb.configure_column("TICKER", header_name="TICKER", cellStyle={'color': 'blue', 'font-weight': 'bold'})
+    gb.configure_column("TIPO_OP", header_name="TIPO_OP", cellStyle={
+        'styleConditions': [
+            {
+                'condition': "String(value) == 'BUY'",
+                'style': {'color': 'green', 'font-weight': 'bold'}
+            }
+        ]
+    })
+
+    gridOptions = gb.build()
+
+    AgGrid(
+        df_to_display,
+        gridOptions=gridOptions,
+        height=500,
+        width='100%',
+        fit_columns_on_grid_load=True,
+        allow_unsafe_jscode=True,
+        enable_quicksearch=True,
+        reload_data=True
     )
-
-    # Mostrar los datos cargados como un dataframe en Streamlit
-    st.dataframe(df_to_display, use_container_width=True, hide_index=True)
-
-
 if menu == menu4:
     styled_subheader("📒 Elección de empresa")
 
-    # Preload S&P 500 tickers
-    sp500_tickers = ['NVDA', 'AAPL', 'MSFT', 'AMZN', 'GOOGL', 'META', 'TSLA']
-    
-    selected_ticker = st.selectbox("Select a Stock Ticker", options=sp500_tickers)
+    # Crear una lista de opciones con el formato "ticker - nombre"
+    options = [f"{ticker} - {name}" for ticker, name in ticker_to_name.items()]
+    options.sort()  # Ordenar alfabéticamente
+
+    # Encontrar el índice de la opción de NVIDIA
+    default_index = options.index("NVDA - NVIDIA Corporation") if "NVDA - NVIDIA Corporation" in options else 0
+
+    # Mostrar el selectbox con las opciones, con NVIDIA por defecto
+    selected_option = st.selectbox("Selecciona una empresa:", options=options, index=default_index)
+
+    # Extraer el ticker de la opción seleccionada
+    selected_ticker = selected_option.split(" - ")[0]
 
     if selected_ticker:
         try:
+            # Usar el ticker seleccionado para obtener datos y mostrar resultados
             # Fetch stock data
             stock = yf.Ticker(selected_ticker)
             info = stock.info
@@ -1137,7 +1695,7 @@ if menu == menu4:
                     "thresholds": {"green": 15, "yellow": 8}
                 },
                 "Debt/Equity": {
-                    "value": round(info.get('debtToEquity', 0), 2),
+                    "value": round(info.get('debtToEquity', 0) / 100, 2),
                     "format": lambda x: f"{x}",
                     "thresholds": {"green": 0.6, "yellow": 1.5},
                     "inverse": True
