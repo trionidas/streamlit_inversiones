@@ -1323,10 +1323,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# --- Inicializar el estado de la sesión ---
 if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
+
+if "show_modal" not in st.session_state:
+    st.session_state.show_modal = False
 
 # Elementos del menú lateral
 menu1 = "📊 Resumen"
@@ -1336,36 +1340,53 @@ menu4 = "🏢 Análisis Empresas"
 menu5 = "📉 Análisis SP500"
 menu6 = "📈 Análisis Multi-Empresa"
 
-# Sidebar content
+# --- Barra lateral ---
 with st.sidebar:
+
+
+    # Botón para abrir el modal de carga
     if not st.session_state.file_uploaded:
+        if st.button("Cargar CSV"):
+            st.session_state.show_modal = True
+    
+    st.title("🐸 Stonks")
 
-        uploaded_file = st.file_uploader("", type="csv")
+    if st.session_state.file_uploaded:
+        opciones_menu = [menu1, menu2, menu3, menu4, menu5, menu6]
+    else:
+        opciones_menu = [menu4, menu5, menu6]
 
-        if uploaded_file is not None:
-            # Validación básica del archivo
+    menu = st.radio("", opciones_menu, label_visibility="collapsed")
+
+# --- Página principal ---
+
+# Modal para la carga de archivos
+if st.session_state.show_modal:
+    uploaded_file = st.file_uploader(" ", type="csv", label_visibility="collapsed")
+
+    if uploaded_file is not None:
+        # Procesar el archivo cargado
+        try:
             df = pd.read_csv(uploaded_file)
             st.session_state.uploaded_file = uploaded_file
             st.session_state.df = df
             st.session_state.file_uploaded = True
-            st.success("✔️ Archivo cargado exitosamente. Menú habilitado.")
+            st.success("✔️ Archivo cargado exitosamente.")
+            # Cerrar el modal y actualizar la página
+            st.session_state.show_modal = False
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ Error al cargar el archivo: {e}")
 
-    if st.session_state.file_uploaded:
-        st.title("🐸 Stonks")
-        df = st.session_state.df
-        opciones_menu = [menu1, menu2, menu3, menu4, menu5, menu6]
-        df = load_data(st.session_state.uploaded_file)
-        df['FECHA'] = pd.to_datetime(df['FECHA'])
-        results = analyze_investments(df)
-        menu = st.radio("", opciones_menu, label_visibility="collapsed")
-    else:
-        opciones_menu = [menu4, menu5, menu6]
-        menu = st.radio("", opciones_menu, label_visibility="collapsed")
+if st.session_state.file_uploaded:
+    df = load_data(st.session_state.uploaded_file)
+    df['FECHA'] = pd.to_datetime(df['FECHA'])
+    results = analyze_investments(df)
 
 # Condiciones para las pestañas
 if menu == menu1 and st.session_state.file_uploaded:
 
-        # styled_subheader('Resumen Total de la Cartera')
+        styled_subheader('Resumen Total de la Cartera')
 
         # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
         st.markdown("""
