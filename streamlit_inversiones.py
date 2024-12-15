@@ -1328,6 +1328,7 @@ if 'file_uploaded' not in st.session_state:
     st.session_state.file_uploaded = False
     st.session_state.uploaded_file = None
     st.session_state.df = None
+    st.session_state.rerun_triggered = False  # Nueva variable de estado
 
 if "show_modal" not in st.session_state:
     st.session_state.show_modal = False
@@ -1370,12 +1371,17 @@ if st.session_state.show_modal:
             st.session_state.uploaded_file = uploaded_file
             st.session_state.df = df
             st.session_state.file_uploaded = True
+            st.session_state.rerun_triggered = True  # Indicar que se debe actualizar
             st.success("✔️ Archivo cargado exitosamente.")
-            # Cerrar el modal y actualizar la página
+            # Cerrar el modal
             st.session_state.show_modal = False
-            # st.rerun()
         except Exception as e:
             st.error(f"❌ Error al cargar el archivo: {e}")
+
+# Forzar la actualización de la página si es necesario
+if st.session_state.rerun_triggered:
+    st.session_state.rerun_triggered = False
+    st.rerun()
 
 if st.session_state.file_uploaded:
     df = load_data(st.session_state.uploaded_file)
