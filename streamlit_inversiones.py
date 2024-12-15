@@ -13,6 +13,7 @@ from streamlit_extras.app_logo import add_logo
 from st_aggrid import AgGrid, GridOptionsBuilder
 
 sp500_ticker_to_name = {
+    '0P0000IKFS.F': 'MSCI North America',
     "MMM": "3M Company",
     "AOS": "A. O. Smith Corporation",
     "ABT": "Abbott Laboratories",
@@ -1054,14 +1055,14 @@ def get_stock_info(ticker: str) -> dict:
         st.error(f"Error al obtener la información del stock: {str(e)}")
         return {}
 
-def get_bg_color(value, thresholds):
-    if value == "N/A":
+# Modificar la función get_bg_color para aceptar el parámetro 'inverse'
+
+def get_bg_color(value, thresholds, inverse=False):
+    if value is None or value == "N/A":
         return "background-color: gray;"
-    elif not thresholds:
-        return ""
-    elif thresholds.get('inverse', False):
+    elif inverse:
         if 'blue' in thresholds and value < thresholds['blue']:
-            return "background-color: #cce0f5; color: #084594;"  # Azul más claro y texto más oscuro
+            return "background-color: #cce0f5; color: #084594;"  # Azul
         elif value < thresholds['green']:
             return "background-color: #dcfce7; color: #166534;"  # Verde
         elif 'yellow' in thresholds and value < thresholds['yellow']:
@@ -1335,11 +1336,11 @@ if "show_modal" not in st.session_state:
 
 # Elementos del menú lateral
 menu1 = "📊 Resumen"
-menu2 = "📈 Visualizaciones"
+menu2 = "👾 Work in Progress"
 menu3 = "📋 Datos Cargados"
-menu4 = "🏢 Análisis Empresas"
+menu4 = "🏢 Análisis Stock"
 menu5 = "📉 Análisis SP500"
-menu6 = "📈 Análisis Multi-Empresa"
+menu6 = "📈 Análisis General"
 
 # --- Barra lateral ---
 with st.sidebar:
@@ -1523,9 +1524,6 @@ if menu == menu1 and st.session_state.file_uploaded:
         styled_df = apply_styles(ticker_details_df)
         st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
 
-
-if menu == menu2 and st.session_state.file_uploaded:
-    
         styled_subheader('Distribución de la Cartera')
 
         portfolio_distribution_fig = plot_portfolio_distribution_bars(results)
@@ -1546,49 +1544,10 @@ if menu == menu2 and st.session_state.file_uploaded:
             
         except Exception as e:
             st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
-            
+
+if menu == menu2 and st.session_state.file_uploaded:
     
-        
-        styled_subheader('Rendimiento de Ticker Específico')
-
-        # Selector de ticker
-        tickers = df['TICKER'].unique()
-        selected_ticker = st.selectbox('Selecciona un ticker:', tickers)
-        
-        if selected_ticker:
-            ticker_df = df[df['TICKER'] == selected_ticker]
-            start_date = ticker_df['FECHA'].min()
-            end_date = datetime.now()
-            
-            # Plotear el rendimiento del ticker seleccionado
-            ticker_performance_fig = plot_ticker_performance(selected_ticker, start_date, end_date)
-            st.plotly_chart(ticker_performance_fig, use_container_width=True)
-        else:
-            st.info("Selecciona un ticker para ver su rendimiento.")
-
-import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
-import pandas as pd
-
-# ... (resto de tus imports) ...
-
-# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
-
-import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
-import pandas as pd
-
-# ... (resto de tus imports) ...
-
-# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
-
-import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder
-import pandas as pd
-
-# ... (resto de tus imports) ...
-
-# ... (funciones auxiliares: get_earnings_date, get_stock_splits, etc.) ...
+        styled_subheader('Work in progress')
 
 if menu == menu3 and st.session_state.file_uploaded:
 
@@ -1723,7 +1682,7 @@ if menu == menu4:
                 "Debt/Equity": {
                     "value": round(info.get('debtToEquity', 0) / 100, 2),
                     "format": lambda x: f"{x}",
-                    "thresholds": {"green": 0.6, "yellow": 1.5},
+                    "thresholds": {"blue": 0.6, "green": 1, "yellow": 2},
                     "inverse": True
                 },
                 "Current Ratio": {
@@ -1745,23 +1704,22 @@ if menu == menu4:
                 }
             }
             
+            # Usar las variables de color en las tarjetas
             cols = st.columns(3)
             for idx, (metric_name, metric_data) in enumerate(metrics.items()):
                 with cols[idx % 3]:
                     value = metric_data["value"]
                     formatted_value = metric_data["format"](value)
-                    
-                    if metric_data.get("inverse", False):
-                        color = ("indicator-green" if value < metric_data["thresholds"]["green"] else
-                                "indicator-yellow" if value < metric_data["thresholds"]["yellow"] else
-                                "indicator-red")
+                    thresholds = metric_data.get("thresholds")
+                    inverse = metric_data.get("inverse", False)
+
+                    if thresholds:
+                        bg_color = get_bg_color(value, thresholds, inverse)
                     else:
-                        color = ("indicator-green" if value > metric_data["thresholds"]["green"] else
-                                "indicator-yellow" if value > metric_data["thresholds"]["yellow"] else
-                                "indicator-red")
-                    
+                        bg_color = ""
+
                     st.markdown(f"""
-                        <div class="metric-card {color}">
+                        <div class="metric-card" style="{bg_color}">
                             <div class="metric-label">{metric_name}</div>
                             <div class="metric-value">{formatted_value}</div>
                         </div>
@@ -1852,32 +1810,39 @@ if menu == menu4:
         except Exception as e:
             st.error(f"Error al obtener datos para {selected_ticker}: {str(e)}")
 
-        st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+
+        start_date = '2021-01-01'
+        end_date = datetime.now()
+        
+        # Plotear el rendimiento del ticker seleccionado
+        ticker_performance_fig = plot_ticker_performance(selected_ticker, start_date, end_date)
+        st.plotly_chart(ticker_performance_fig, use_container_width=True)
+
         styled_subheader("Valores Intrínsecos de Inversiones")
 
-    cols = st.columns(2)  # Crear 2 columnas para agrupar los inputs
-    with cols[0]:
-        discount_rate = st.number_input(
-            "Tasa de Descuento (%)", min_value=0.01, value=10.0, step=0.1, key="discount_rate"
-        ) / 100
-        growth_rate = st.number_input(
-            "Tasa de Crecimiento Anual (%)", min_value=0.01, value=10.0, step=0.1, key="growth_rate"
-        ) / 100
+        cols = st.columns(2)  # Crear 2 columnas para agrupar los inputs
+        with cols[0]:
+            discount_rate = st.number_input(
+                "Tasa de Descuento (%)", min_value=0.01, value=10.0, step=0.1, key="discount_rate"
+            ) / 100
+            growth_rate = st.number_input(
+                "Tasa de Crecimiento Anual (%)", min_value=0.01, value=10.0, step=0.1, key="growth_rate"
+            ) / 100
 
-    with cols[1]:
-        growth_stage_years = st.number_input(
-            "Años de Crecimiento", min_value=1, value=10, step=1, key="growth_stage_years"
-        )
-        terminal_growth_rate = st.number_input(
-            "Tasa de Crecimiento Terminal (%)", min_value=0.01, value=4.0, step=0.1, key="terminal_growth_rate"
-        ) / 100
+        with cols[1]:
+            growth_stage_years = st.number_input(
+                "Años de Crecimiento", min_value=1, value=10, step=1, key="growth_stage_years"
+            )
+            terminal_growth_rate = st.number_input(
+                "Tasa de Crecimiento Terminal (%)", min_value=0.01, value=4.0, step=0.1, key="terminal_growth_rate"
+            ) / 100
 
-        # Inicializar variables en session_state
-        if "iv_result" not in st.session_state:
-            st.session_state.iv_result = None
-            st.session_state.current_price = None
-            st.session_state.mos = None
-            st.session_state.calculate = False  # Control de cálculo
+            # Inicializar variables en session_state
+            if "iv_result" not in st.session_state:
+                st.session_state.iv_result = None
+                st.session_state.current_price = None
+                st.session_state.mos = None
+                st.session_state.calculate = False  # Control de cálculo
 
     # Botón para calcular el valor intrínseco
     if st.button("Calcular Valor Intrínseco"):
