@@ -1343,7 +1343,6 @@ menu6 = "📈 Análisis Multi-Empresa"
 # --- Barra lateral ---
 with st.sidebar:
 
-
     # Botón para abrir el modal de carga
     if not st.session_state.file_uploaded:
         if st.button("Cargar CSV"):
@@ -1374,7 +1373,7 @@ if st.session_state.show_modal:
             st.success("✔️ Archivo cargado exitosamente.")
             # Cerrar el modal y actualizar la página
             st.session_state.show_modal = False
-            st.rerun()
+            # st.rerun()
         except Exception as e:
             st.error(f"❌ Error al cargar el archivo: {e}")
 
