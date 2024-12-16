@@ -651,35 +651,56 @@ def analyze_investments(df):
     
     return pd.DataFrame(results)
 
-def plot_portfolio_distribution_bars(results):
-    # Calcular el porcentaje de cada ticker
-    distribution_data = results.groupby('Ticker')['Valor Actual (EUR)'].sum().reset_index()
-    distribution_data['Porcentaje'] = (distribution_data['Valor Actual (EUR)'] / 
-                                       distribution_data['Valor Actual (EUR)'].sum()) * 100
-    # Ordenar por porcentaje descendente
-    distribution_data = distribution_data.sort_values('Porcentaje', ascending=True)  # Ascendente para que el mayor quede arriba
 
-    # Crear el gráfico de barras horizontales
-    fig = px.bar(
-        distribution_data,
-        x='Porcentaje',
-        y='Ticker',
-        orientation='h',
-        text='Porcentaje',
-        color='Porcentaje',
-        color_continuous_scale=px.colors.sequential.Blues,
-        labels={'Ticker': 'Ticker', 'Porcentaje': 'Porcentaje (%)'}
+def plot_portfolio_distribution_bars(results):
+    distribution_data = results.groupby('Ticker')['Valor Actual (EUR)'].sum().reset_index()
+    distribution_data['Porcentaje'] = (distribution_data['Valor Actual (EUR)'] / distribution_data['Valor Actual (EUR)'].sum()) * 100
+    distribution_data = distribution_data.sort_values('Porcentaje', ascending=True)
+
+    # Añadir nombres completos de las empresas
+    distribution_data['Nombre'] = distribution_data['Ticker'].map(ticker_to_name)
+    distribution_data['Etiqueta'] = distribution_data['Ticker'] + ' - ' + distribution_data['Nombre']
+
+    # Formatear los valores antes de usarlos en el f-string
+    distribution_data['Texto'] = distribution_data.apply(
+        lambda x: f"{x['Porcentaje']:.2f}% ({x['Valor Actual (EUR)']:,.2f} EUR)", axis=1
     )
-    # Estilizar el gráfico
-    fig.update_traces(texttemplate='%{text:.2f}%', textposition='inside')
+
+    fig = go.Figure(go.Bar(
+        x=distribution_data['Porcentaje'],
+        y=distribution_data['Etiqueta'],
+        orientation='h',
+        text=distribution_data['Texto'],
+        textposition='inside',  # Colocar el texto dentro de las barras
+        marker=dict(
+            color=distribution_data['Porcentaje'],
+            colorscale='Sunset',  # Cambio aquí
+            cmin=0.80,
+            cmax=distribution_data['Porcentaje'].max(),
+            showscale=False
+        ),
+        insidetextanchor="start"  # Centrar el texto dentro de la barra
+    ))
+
     fig.update_layout(
         xaxis_title="Porcentaje (%)",
         yaxis_title="",
-        coloraxis_showscale=False,  # Ocultar barra de colores
-        title=dict(text=None),  # Asegurar que el título esté completamente desactivado
-        plot_bgcolor='rgba(0,0,0,0)',  # Fondo transparente
-        xaxis=dict(gridcolor='rgba(200,200,200,0.5)')  # Líneas de la cuadrícula suaves
+        plot_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(gridcolor='rgba(200,200,200,0.5)'),
+        title=dict(text=None),
+        uniformtext_minsize=10, uniformtext_mode='hide'  # Ajustar tamaño mínimo de texto
     )
+
+    fig.update_traces(
+        hovertemplate="<br>".join([
+            "Ticker: %{y}",
+            "Porcentaje: %{x:.2f}%",
+            "Valor Actual: %{text}"
+        ]),
+        textfont_size=12,  # Aumentar tamaño de fuente del texto en la barra
+        textfont_color="white"  # Hacer el color del texto blanco para mejor contraste
+    )
+
     return fig
 
 def plot_portfolio_distribution(results):
@@ -1120,14 +1141,14 @@ def get_data_for_multiple_companies(tickers):
             data.append(
                 {
                     "Ticker": ticker,
-                    "Market Cap (B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
-                    "ROE (%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
-                    "Debt/Equity": round(info.get("debtToEquity", 0) / 100, 2) if info.get("debtToEquity") is not None else "N/A",                    "Current Ratio": info.get("currentRatio", "N/A"),
-                    "PE Ratio": info.get("trailingPE", "N/A"),
-                    "PBV Ratio": info.get("priceToBook", "N/A"),
-                    "Operating CF (Var) (%)": operating_cf_change,
-                    "Investing CF (Var) (%)": investing_cf_change,
-                    "Financing CF (Var) (%)": financing_cf_change,
+                    "MarketCap(B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
+                    "ROE(%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
+                    "D/E": round(info.get("debtToEquity", 0) / 100, 2) if info.get("debtToEquity") is not None else "N/A",                    "CR": info.get("currentRatio", "N/A"),
+                    "PE": info.get("trailingPE", "N/A"),
+                    "PBV": info.get("priceToBook", "N/A"),
+                    "Op.CF(Var%)": operating_cf_change,
+                    "Inv.CF(Var%)": investing_cf_change,
+                    "F.CF(Var%)": financing_cf_change,
                 }
             )
         except Exception as e:
@@ -1135,15 +1156,15 @@ def get_data_for_multiple_companies(tickers):
             data.append(
                 {
                     "Ticker": ticker,
-                    "Market Cap (B)": "N/A",
-                    "ROE (%)": "N/A",
-                    "Debt/Equity": "N/A",
-                    "Current Ratio": "N/A",
-                    "PE Ratio": "N/A",
-                    "PBV Ratio": "N/A",
-                    "Operating CF (Var) (%)": "N/A",
-                    "Investing CF (Var) (%)": "N/A",
-                    "Financing CF (Var) (%)": "N/A",
+                    "MarketCap(B)": "N/A",
+                    "ROE(%)": "N/A",
+                    "D/E": "N/A",
+                    "CR": "N/A",
+                    "PE": "N/A",
+                    "PBV": "N/A",
+                    "Op.CF(Var%)": "N/A",
+                    "Inv.CF(Var%)": "N/A",
+                    "F.CF(Var%)": "N/A",
                 }
             )
 
@@ -1154,15 +1175,15 @@ def analyze_multiple_companies(tickers):
 
     # Definir umbrales
     thresholds = {
-        "Market Cap (B)": {"green": 10, "yellow": 5},
-        "ROE (%)": {"green": 8, "yellow": 7},
-        "Debt/Equity": {"blue": 0.6, "green": 1, "yellow": 2, "inverse": True},
-        "Current Ratio": {"green": 1.5, "yellow": 1},
-        "PE Ratio": {"green": 15, "yellow": 30, "inverse": True},
-        "PBV Ratio": {"green": 1.5, "yellow": 4.5, "inverse": True},
-        "Operating CF (Var) (%)": {"green": 0, "yellow": -5},
-        "Investing CF (Var) (%)": {"green": 0, "yellow": 5, "inverse": True},
-        "Financing CF (Var) (%)": {"green": 0, "yellow": 5, "inverse": True},
+        "MarketCap(B)": {"green": 10, "yellow": 5},
+        "ROE(%)": {"green": 8, "yellow": 7},
+        "D/E": {"blue": 0.6, "green": 1, "yellow": 2, "inverse": True},
+        "CR": {"green": 1.5, "yellow": 1},
+        "PE": {"green": 15, "yellow": 30, "inverse": True},
+        "PBV": {"green": 1.5, "yellow": 4.5, "inverse": True},
+        "Op.CF(Var%)": {"green": 0, "yellow": -5},
+        "Inv.CF(Var%)": {"green": 0, "yellow": 5, "inverse": True},
+        "F.CF(Var%)": {"green": 0, "yellow": 5, "inverse": True},
     }
 
     def style_df(df, thresholds):
@@ -1687,24 +1708,24 @@ if menu == menu4:
                     "format": lambda x: f"{x}%",
                     "thresholds": {"green": 15, "yellow": 8}
                 },
-                "Debt/Equity": {
+                "D/E": {
                     "value": round(info.get('debtToEquity', 0) / 100, 2),
                     "format": lambda x: f"{x}",
                     "thresholds": {"blue": 0.6, "green": 1, "yellow": 2},
                     "inverse": True
                 },
-                "Current Ratio": {
+                "CR": {
                     "value": round(info.get('currentRatio', 0), 2),
                     "format": lambda x: f"{x}",
                     "thresholds": {"green": 2, "yellow": 1}
                 },
-                "PE Ratio": {
+                "PE": {
                     "value": round(info.get('trailingPE', 0), 2),
                     "format": lambda x: f"{x}",
                     "thresholds": {"green": 15, "yellow": 30},
                     "inverse": True
                 },
-                "PBV Ratio": {
+                "PBV": {
                     "value": round(info.get('priceToBook', 0), 2),
                     "format": lambda x: f"{x}",
                     "thresholds": {"green": 1.5, "yellow": 4.5},
