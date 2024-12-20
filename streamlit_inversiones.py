@@ -11,6 +11,8 @@ import numpy as np
 from typing import Optional
 from streamlit_extras.app_logo import add_logo
 from st_aggrid import AgGrid, GridOptionsBuilder
+import numpy_financial as npf
+from pyxirr import xirr
 
 sp500_ticker_to_name = {
     '0P0000IKFS.F': 'MSCI North America',
@@ -555,21 +557,21 @@ def get_current_price(ticker):
     try:
         stock = yf.Ticker(ticker)
         info = stock.info
-        
+
         for price_field in ['regularMarketPrice', 'currentPrice', 'previousClose', 'ask', 'bid', 'open', 'dayHigh', 'dayLow']:
             if price_field in info and info[price_field] is not None:
-                return info[price_field]
-        
+
+                return info[price_field] # Podriamos añadir una depuracion aqui para ver que campo se esta usando
+
         hist = stock.history(period="1d")
         if not hist.empty and 'Close' in hist.columns:
             return hist['Close'].iloc[-1]
-        
+
         st.warning(f"No se pudo obtener el precio actual para {ticker}. Info disponible: {info.keys()}")
         return None
     except Exception as e:
         st.warning(f"Error al obtener datos para {ticker}: {str(e)}")
         return None
-    
 
 # Función para obtener el precio actual (recuperamos para Intrinsec value)
 def get_current_price2(info: dict) -> float:
@@ -584,57 +586,91 @@ def get_historical_data(ticker, start_date, end_date):
     hist = stock.history(start=start_date, end=end_date)
     return hist
 
+def calculate_tir(cashflows, dates):
+    if not cashflows:
+        return 0
+    try:
+        # Asegurar que las fechas sean objetos date
+        dates = [d.date() if isinstance(d, pd.Timestamp) else d for d in dates]
+        tir = xirr(dates, cashflows) # El orden de los argumentos es distinto a npf.irr
+        return tir
+    except Exception as e:
+        st.write(f"Error al calcular la TIR: {e}")
+        return 0
+
 def analyze_investments(df):
     results = []
     exchange_rate = get_exchange_rate()
-    
+
+    # Lista para almacenar todos los flujos de efectivo individuales
+    all_cashflows = []
+
     for ticker in df['TICKER'].unique():
+        
         ticker_df = df[df['TICKER'] == ticker]
+        
         buy_df = ticker_df[ticker_df['TIPO_OP'] == 'BUY']
         dividend_df = ticker_df[ticker_df['TIPO_OP'] == 'Dividendo']
-        split_df = ticker_df[ticker_df['TIPO_OP'] == 'Split']
-        
+
         total_invested = buy_df['PRECIO_OPERACION_EUR'].sum()
         total_shares = buy_df['VOLUMEN'].sum()
         avg_price = total_invested / total_shares if total_shares != 0 else 0
-        
-        # Definir total_dividends por defecto
         total_dividends = dividend_df['PRECIO_OPERACION_EUR'].sum() if not dividend_df.empty else 0
-        
+
         current_price = get_current_price(ticker)
+        stock = yf.Ticker(ticker)
+        full_name = stock.info.get('longName', ticker) 
+
         previous_close = None
-        
         try:
-            # Obtener el precio de cierre del día anterior
             hist = get_historical_data(ticker, start_date=datetime.now() - timedelta(days=5), end_date=datetime.now())
             if not hist.empty and 'Close' in hist.columns:
-                previous_close = hist['Close'].iloc[-2]  # Penúltimo día disponible
+                previous_close = hist['Close'].iloc[-2]
         except Exception as e:
             st.warning(f"Error obteniendo el cierre anterior para {ticker}: {e}")
-        
+
         if ticker != '0P0000IKFS.F' and current_price is not None:
             current_price *= exchange_rate
         if previous_close is not None:
             previous_close *= exchange_rate
-        
-        if current_price is not None:
-            current_value = current_price * total_shares
-            profit_loss = current_value - total_invested + total_dividends
-            profit_loss_percentage = (profit_loss / total_invested) * 100 if total_invested != 0 else 0
-            
-            # Calcular variación diaria
-            daily_change = current_price - previous_close if previous_close is not None else None
-            daily_change_percentage = (daily_change / previous_close) * 100 if previous_close else None
-        else:
-            current_value = None
-            profit_loss = None
-            profit_loss_percentage = None
-            daily_change = None
-            daily_change_percentage = None
-        
-        splits = split_df['VOLUMEN'].sum()
-        
+
+        current_value = current_price * total_shares if current_price is not None else None
+
+        # --- Aquí se añade el flujo positivo del valor actual ---
+        df_ticker_cashflows = pd.DataFrame()
+        if not buy_df.empty:
+            df_ticker_cashflows = pd.concat([
+                df_ticker_cashflows,
+                pd.DataFrame({
+                    'FECHA': buy_df['FECHA'],
+                    'cashflow': -buy_df['PRECIO_OPERACION_EUR']
+                })
+            ])
+
+        if current_value is not None:
+            df_ticker_cashflows = pd.concat([
+                df_ticker_cashflows,
+                pd.DataFrame({
+                    'FECHA': [datetime.now()],
+                    'cashflow': [current_value + total_dividends]
+                })
+            ])
+
+
+        # Calcular TIR por ticker
+        ticker_cashflows = df_ticker_cashflows['cashflow'].tolist()
+        ticker_dates = df_ticker_cashflows['FECHA'].tolist()
+        tir_ticker = calculate_tir(ticker_cashflows, ticker_dates)
+
+        # --- Cálculo de variación diaria ---
+        daily_change = current_price - previous_close if previous_close is not None else None
+        daily_change_percentage = (daily_change / previous_close) * 100 if previous_close else None
+
+        # Agregar flujos de efectivo del ticker a la lista global
+        all_cashflows.extend(df_ticker_cashflows.to_dict('records'))
+
         results.append({
+            'Nombre': full_name,
             'Ticker': ticker,
             'Total Invertido (EUR)': total_invested,
             'Acciones': total_shares,
@@ -642,15 +678,28 @@ def analyze_investments(df):
             'Precio Actual (EUR)': current_price,
             'Valor Actual (EUR)': current_value,
             'Dividendos Recibidos (EUR)': total_dividends,
-            'Ganancia/Pérdida (EUR)': profit_loss,
-            'Ganancia/Pérdida %': profit_loss_percentage,
+            'Ganancia/Pérdida (EUR)': current_value - total_invested + total_dividends if current_value is not None else None,
+            'Ganancia/Pérdida %': ((current_value - total_invested + total_dividends) / total_invested) * 100 if current_value is not None and total_invested != 0 else None,
             'Variación Diaria (EUR)': daily_change,
             'Variación Diaria %': daily_change_percentage,
-            'Splits': splits
+            'TIR': tir_ticker,
         })
-    
-    return pd.DataFrame(results)
 
+    # Calcular TIR global
+    if all_cashflows:
+        df_global_cashflows = pd.DataFrame(all_cashflows)
+        df_global_cashflows = df_global_cashflows.groupby('FECHA')['cashflow'].sum().reset_index()
+        global_cashflows = df_global_cashflows['cashflow'].tolist()
+        global_dates = df_global_cashflows['FECHA'].tolist()
+        tir_global = calculate_tir(global_cashflows, global_dates)
+
+    else:
+        tir_global = 0
+
+    results_df = pd.DataFrame(results)
+    results_df['TIR Global'] = tir_global
+
+    return results_df
 
 def plot_portfolio_distribution_bars(results):
     distribution_data = results.groupby('Ticker')['Valor Actual (EUR)'].sum().reset_index()
@@ -683,6 +732,7 @@ def plot_portfolio_distribution_bars(results):
     ))
 
     fig.update_layout(
+        margin=dict(l=40, r=0, t=20, b=0),  # Ajustar el valor de t (margen superior)
         xaxis_title="Porcentaje (%)",
         yaxis_title="",
         plot_bgcolor='rgba(0,0,0,0)',
@@ -703,6 +753,7 @@ def plot_portfolio_distribution_bars(results):
 
     return fig
 
+
 def plot_portfolio_distribution(results):
     fig = px.pie(
         results,
@@ -722,6 +773,7 @@ def plot_portfolio_distribution(results):
     # Configuración de diseño
     fig.update_layout(
         showlegend=True,
+        
         legend=dict(
             title='Ticker',
             orientation="h",
@@ -730,14 +782,12 @@ def plot_portfolio_distribution(results):
             xanchor="center",
             x=0.5
         ),
-        margin=dict(t=40, b=40, l=0, r=0),
         paper_bgcolor='white',  # Fondo blanco para todo el gráfico
         plot_bgcolor='white',
         title_font=dict(size=24, color='#4a90e2', family='Arial'),  # Estilo del título
     )
     
     return fig
-
 @st.cache_data(ttl=3600)
 def plot_ticker_performance(ticker, start_date, end_date):
     historical_data = get_historical_data(ticker, start_date, end_date)
@@ -873,6 +923,7 @@ def plot_investment_over_time(df, results):
     # Actualizar el diseño
     fig.update_layout(
         title="Inversión Acumulada vs Valor de la Inversión",
+        margin=dict(t=40, b=40, l=0, r=0),
         xaxis_title="Fecha",
         yaxis_title="EUR",
         legend=dict(x=0.01, y=0.99, bgcolor='rgba(255, 255, 255, 0.5)'),
@@ -1102,6 +1153,7 @@ def get_bg_color(value, thresholds, inverse=False):
             return "background-color: #fee2e2; color: #991b1b;"  # Rojo
 
 @st.cache_data
+
 def get_data_for_multiple_companies(tickers):
     data = []
     for ticker in tickers:
@@ -1109,6 +1161,8 @@ def get_data_for_multiple_companies(tickers):
             stock = yf.Ticker(ticker)
             info = stock.info
             cashflow = stock.quarterly_cashflow
+            listing_years = calculate_listing_years(ticker)
+            return_10y = calculate_annualized_return_10y(ticker)
 
             # Obtener la variación del CF respecto al trimestre anterior
             operating_cf_change = "N/A"
@@ -1137,18 +1191,31 @@ def get_data_for_multiple_companies(tickers):
                     / abs(cashflow.loc["Financing Cash Flow", cashflow.columns[1]])
                 ) * 100 if cashflow.loc["Financing Cash Flow", cashflow.columns[1]] != 0 else 0
 
-            # Multiplicar ROE por 100 al momento de recopilar los datos
+            # Función auxiliar para obtener valores numéricos o NaN
+            def get_numeric_value(info_dict, key, operation=lambda x: x):
+                value = info_dict.get(key)
+                if value is not None:
+                    try:
+                        return operation(value)
+                    except (TypeError, ValueError):
+                        return float("nan")  # Usar NaN en lugar de "N/A"
+                else:
+                    return float("nan")  # Usar NaN en lugar de "N/A"
+
             data.append(
                 {
                     "Ticker": ticker,
-                    "MarketCap(B)": round(info.get("marketCap", 0) / 1e9, 2) if info.get("marketCap") is not None else "N/A",
-                    "ROE(%)": round(info.get("returnOnEquity", 0) * 100, 2) if info.get("returnOnEquity") is not None else "N/A",
-                    "D/E": round(info.get("debtToEquity", 0) / 100, 2) if info.get("debtToEquity") is not None else "N/A",                    "CR": info.get("currentRatio", "N/A"),
-                    "PE": info.get("trailingPE", "N/A"),
-                    "PBV": info.get("priceToBook", "N/A"),
-                    "Op.CF(Var%)": operating_cf_change,
-                    "Inv.CF(Var%)": investing_cf_change,
-                    "F.CF(Var%)": financing_cf_change,
+                    "MarketCap(B)": get_numeric_value(info, "marketCap", lambda x: round(x / 1e9, 2)),
+                    "ROE(%)": get_numeric_value(info, "returnOnEquity", lambda x: round(x * 100, 2)),
+                    "D/E": get_numeric_value(info, "debtToEquity", lambda x: round(x / 100, 2)),
+                    "CR": get_numeric_value(info, "currentRatio"),
+                    "PE": get_numeric_value(info, "trailingPE"),
+                    "PBV": get_numeric_value(info, "priceToBook"),
+                    "Ret10y": return_10y if return_10y is not None else float("nan"),
+                    "Years": listing_years if listing_years is not None else float("nan"),
+                    "Op.CF(Var%)": operating_cf_change if operating_cf_change is not None and operating_cf_change != "N/A" else float("nan"),
+                    "Inv.CF(Var%)": investing_cf_change if investing_cf_change is not None and investing_cf_change != "N/A" else float("nan"),
+                    "F.CF(Var%)": financing_cf_change if financing_cf_change is not None and financing_cf_change != "N/A" else float("nan"),
                 }
             )
         except Exception as e:
@@ -1156,15 +1223,17 @@ def get_data_for_multiple_companies(tickers):
             data.append(
                 {
                     "Ticker": ticker,
-                    "MarketCap(B)": "N/A",
-                    "ROE(%)": "N/A",
-                    "D/E": "N/A",
-                    "CR": "N/A",
-                    "PE": "N/A",
-                    "PBV": "N/A",
-                    "Op.CF(Var%)": "N/A",
-                    "Inv.CF(Var%)": "N/A",
-                    "F.CF(Var%)": "N/A",
+                    "MarketCap(B)": float("nan"),
+                    "ROE(%)": float("nan"),
+                    "D/E": float("nan"),
+                    "CR": float("nan"),
+                    "PE": float("nan"),
+                    "PBV": float("nan"),
+                    "Ret10y": float("nan"),
+                    "Years": float("nan"),
+                    "Op.CF(Var%)": float("nan"),
+                    "Inv.CF(Var%)": float("nan"),
+                    "F.CF(Var%)": float("nan"),
                 }
             )
 
@@ -1181,6 +1250,8 @@ def analyze_multiple_companies(tickers):
         "CR": {"green": 1.5, "yellow": 1},
         "PE": {"green": 15, "yellow": 30, "inverse": True},
         "PBV": {"green": 1.5, "yellow": 4.5, "inverse": True},
+        "Ret10y": {"green": 15, "yellow": 10},
+        "Years": {"green": 10, "yellow": 8},
         "Op.CF(Var%)": {"green": 0, "yellow": -5},
         "Inv.CF(Var%)": {"green": 0, "yellow": 5, "inverse": True},
         "F.CF(Var%)": {"green": 0, "yellow": 5, "inverse": True},
@@ -1208,6 +1279,66 @@ def analyze_multiple_companies(tickers):
 
     return styled_df
 
+def calculate_listing_years(ticker):
+    """
+    Calcula los años que lleva cotizando una empresa.
+
+    Args:
+        ticker (str): El ticker de la empresa.
+
+    Returns:
+        int: El número de años que lleva cotizando la empresa, o None si hay un error.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        first_trade_date = info.get("firstTradeDateEpochUtc")
+
+        if first_trade_date is None:
+            # Algunas empresas no tienen firstTradeDateEpochUtc, pero tienen ipoDate
+            ipo_date = info.get("ipoDate")
+            if ipo_date:
+                first_trade_date = int(datetime.strptime(ipo_date, "%Y-%m-%d").timestamp())
+
+        if first_trade_date:
+            first_trade_datetime = datetime.utcfromtimestamp(first_trade_date)
+            years_listed = datetime.now().year - first_trade_datetime.year
+            return years_listed
+        else:
+            return None
+    except Exception as e:
+        print(f"Error al obtener datos para {ticker}: {e}")
+        return None
+
+def calculate_annualized_return_10y(ticker):
+    """
+    Calcula la revalorización anualizada de una empresa en los últimos 10 años.
+
+    Args:
+        ticker (str): El ticker de la empresa.
+
+    Returns:
+        float: La revalorización anualizada en porcentaje, o None si hay un error.
+    """
+    try:
+        stock = yf.Ticker(ticker)
+        hist = stock.history(period="10y")  # Obtener datos de los últimos 10 años
+
+        if hist.empty:
+            print(f"No se encontraron datos históricos para {ticker} en los últimos 10 años.")
+            return None
+
+        start_price = hist["Close"].iloc[0]
+        end_price = hist["Close"].iloc[-1]
+
+        total_return = (end_price / start_price) - 1
+        annualized_return = (1 + total_return) ** (1 / 10) - 1  # Usar 10 para 10 años
+
+        return round(annualized_return * 100, 2) # Convertir a porcentaje y solo 2 decimales
+
+    except Exception as e:
+        print(f"Error al obtener datos para {ticker}: {e}")
+        return None
 
 # Function to display a styled subheader
 def styled_subheader(text):
@@ -1335,12 +1466,12 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         border: 1px solid #a8dadc;
     }
-    /* Estilo para las tarjetas de cashflow */
     .card-container {
-        height: 200px; /* Ajusta la altura según sea necesario */
+        height: 150px; /* Ajusta la altura según sea necesario */
         margin-bottom: 10px; /* Espacio entre tarjetas */
         display: flex;
         flex-direction: column;
+    }
     }
     .card-content {
         flex-grow: 1;
@@ -1374,11 +1505,6 @@ menu6 = "📈 Análisis General"
 # --- Barra lateral ---
 with st.sidebar:
 
-    # Botón para abrir el modal de carga
-    if not st.session_state.file_uploaded:
-        if st.button("Cargar CSV"):
-            st.session_state.show_modal = True
-    
     st.title("🐸 Stonks")
 
     if st.session_state.file_uploaded:
@@ -1387,6 +1513,11 @@ with st.sidebar:
         opciones_menu = [menu4, menu5, menu6]
 
     menu = st.radio("", opciones_menu, label_visibility="collapsed")
+
+        # Botón para abrir el modal de carga
+    if not st.session_state.file_uploaded:
+        if st.button("Cargar CSV"):
+            st.session_state.show_modal = True
 
 # --- Página principal ---
 
@@ -1419,166 +1550,268 @@ if st.session_state.file_uploaded:
     results = analyze_investments(df)
 
 # Condiciones para las pestañas
+
 if menu == menu1 and st.session_state.file_uploaded:
 
-        styled_subheader('Resumen Total de la Cartera')
+    styled_subheader('Resumen Total de la Cartera')
 
-        # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
-        st.markdown("""
-            <style>
-                .resumen-cartera p {
-                    font-size: 16px !important;
-                    line-height: 1.5;
-                }
-            </style>
+    # CSS personalizado para asegurar que el tamaño de fuente se aplique correctamente
+    st.markdown("""
+        <style>
+            .resumen-cartera p {
+                font-size: 16px !important;
+                line-height: 1.5;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Cálculos de resumen total
+    total_invested = results['Total Invertido (EUR)'].sum()
+    total_current_value = results['Valor Actual (EUR)'].sum()
+    total_dividends = results['Dividendos Recibidos (EUR)'].sum()
+    total_profit_loss = total_current_value - total_invested + total_dividends
+    total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
+    # Obtener la TIR global del DataFrame 'results'
+    tir_global = results['TIR Global'].iloc[0] if not results.empty else 0
+
+    # --- Fila Superior ---
+    col1, col2, col3 = st.columns(3)
+
+    # Tarjeta para el Capital Invertido
+    with col1:
+        st.markdown(f"""
+            <div style="background-color:#f0f8ff; padding:10px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                <h4 style="margin:0; color:#1d3557; font-size:16px;">💰 Invertido</h4>
+                <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_invested:,.2f} €</p>
+            </div>
         """, unsafe_allow_html=True)
 
-        # Cálculos de resumen total
-        total_invested = results['Total Invertido (EUR)'].sum()
-        total_current_value = results['Valor Actual (EUR)'].sum()
-        total_dividends = results['Dividendos Recibidos (EUR)'].sum()
-        total_profit_loss = total_current_value - total_invested + total_dividends
-        total_profit_loss_percentage = (total_profit_loss / total_invested) * 100 if total_invested != 0 else 0
+    # Tarjeta para el Valor Actual
+    with col2:
+        st.markdown(f"""
+            <div style="background-color:#f0f8ff; padding:10px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                <h4 style="margin:0; color:#1d3557; font-size:16px;">📈 Valor Actual</h4>
+                <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_current_value:,.2f} €</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-        # Mostrar datos en tarjetas
-        col1, col2, col3, col4 = st.columns(4)
+    # Tarjeta para los Dividendos
+    with col3:
+        st.markdown(f"""
+            <div style="background-color:#f0f8ff; padding:10px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                <h4 style="margin:0; color:#1d3557; font-size:16px;">💸 Dividendos</h4>
+                <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_dividends:,.2f} €</p>
+            </div>
+        """, unsafe_allow_html=True)
 
-        # Tarjeta para el Capital Invertido
-        with col1:
-            st.markdown(f"""
-                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
-                    <h4 style="margin:0; color:#1d3557; font-size:16px;">💰 Invertido</h4>
-                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_invested:,.2f} €</p>
-                </div>
-            """, unsafe_allow_html=True)
+    st.markdown("<div style='margin-top: -10px;'><br></div>", unsafe_allow_html=True)
 
-        # Tarjeta para el Valor Actual
-        with col2:
-            st.markdown(f"""
-                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
-                    <h4 style="margin:0; color:#1d3557; font-size:16px;">📈 Valor Actual</h4>
-                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_current_value:,.2f} €</p>
-                </div>
-            """, unsafe_allow_html=True)
+    # --- Fila Inferior ---
+    col4, col5 = st.columns(2)
 
-        # Tarjeta para el Rendimiento (sin h4)
-        rendimiento_color = "#2a9d8f" if total_profit_loss >= 0 else "#e63946"
-        with col3:
-            st.markdown(f"""
-                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px; display: flex; flex-direction: column; justify-content: center;">
-                    <p style="font-size:22px; font-weight:bold; margin:0; color:{rendimiento_color};">
-                        {total_profit_loss:+,.2f} €
-                    </p>
-                    <p style="font-size:18px; font-weight:normal; margin:0; color:{rendimiento_color};">
-                        {total_profit_loss_percentage:+.2f}%
-                    </p>
-                </div>
-            """, unsafe_allow_html=True)
+    # Tarjeta para el Rendimiento (Valor Actual y Porcentaje)
+    rendimiento_color = "#2a9d8f" if total_profit_loss >= 0 else "#e63946"
+    with col4:
+        st.markdown(f"""
+            <div style="background-color:#f0f8ff; padding:10px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px; display: flex; flex-direction: column; justify-content: center;">
+                <p style="font-size:22px; font-weight:bold; margin:0; color:{rendimiento_color};">
+                    {total_profit_loss:,.2f} €
+                </p>
+                <p style="font-size:18px; font-weight:normal; margin:0; color:{rendimiento_color};">
+                    {total_profit_loss_percentage:+.2f}%
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-        # Tarjeta para los Dividendos
-        with col4:
-            st.markdown(f"""
-                <div style="background-color:#f0f8ff; padding:15px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
-                    <h4 style="margin:0; color:#1d3557; font-size:16px;">💸 Dividendos</h4>
-                    <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{total_dividends:,.2f} €</p>
-                </div>
-            """, unsafe_allow_html=True)
+    # Tarjeta para la TIR Global
+    with col5:
+        st.markdown(f"""
+            <div style="background-color:#f0f8ff; padding:10px; border-radius:10px; text-align:center; box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); height: 120px;">
+                <h4 style="margin:0; color:#1d3557; font-size:16px;">🌐 TIR Global</h4>
+                <p style="font-size:22px; font-weight:bold; margin:5px 0; color:#457b9d;">{tir_global:.2%} </p>
+            </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("""
+        <style>
+        .compact-card {
+            background-color: #f0f8ff; /* Fondo suave */
+            padding: 5px 10px; /* Espacio interno reducido */
+            margin: 2px;
+            border-radius: 5px; /* Bordes redondeados */
+            text-align: center; /* Centrar texto */
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1); /* Sombra sutil */
+            font-family: 'Arial', sans-serif; /* Tipografía */
+        }
+        .metric-label {
+            color: #1d3557; /* Color para la etiqueta */
+            font-size: 12px; /* Tamaño de fuente reducido */
+            font-weight: bold;
+            margin-bottom: 2px; /* Espacio inferior */
+        }
+        .metric-value {
+            font-size: 16px; /* Tamaño de fuente para el valor */
+            font-weight: normal;
+            margin: 0;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+    # --- Resto del código ---
+    exchange_rate = get_exchange_rate()
+    st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
+
+    # styled_subheader('Detalle de Inversiones por Ticker')
+    # st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+
+    # Crear el DataFrame con detalles de inversión por ticker
+    data = []
+    for ticker in results['Ticker'].unique():
+        ticker_results = results[results['Ticker'] == ticker]
+        ticker_invested = ticker_results['Total Invertido (EUR)'].values[0]
+        ticker_current_value = ticker_results['Valor Actual (EUR)'].values[0]
+        ticker_profit_loss = ticker_current_value - ticker_invested
+        ticker_profit_loss_percentage = (ticker_profit_loss / ticker_invested) * 100 if ticker_invested != 0 else 0
+        ticker_tir = ticker_results['TIR'].values[0] if 'TIR' in ticker_results.columns else 0
+
+        # Obtener valores existentes
+        ticker_daily_change = ticker_results['Variación Diaria (EUR)'].values[0] if 'Variación Diaria (EUR)' in ticker_results.columns else 0
+        ticker_daily_change_percentage = ticker_results['Variación Diaria %'].values[0] if 'Variación Diaria %' in ticker_results.columns else 0
+        ticker_shares = ticker_results['Acciones'].values[0] if 'Acciones' in ticker_results.columns else 0
+
+        # Calcular Ganancia/Pérdida Diaria en dinero
+        ticker_daily_profit_loss = ticker_daily_change * ticker_shares
+        
+        # Acceder al nombre completo de la empresa desde ticker_results
+        full_name = ticker_results['Nombre'].iloc[0]  # Añadir esta línea
+
+        data.append({
+            'Nombre': ticker,
+            'TIR': ticker_results['TIR'].iloc[0],
+            'Invertido (€)': round(ticker_invested, 2),
+            'Valor Actual (€)': round(ticker_current_value, 2),
+            'G/P (€)': round(ticker_profit_loss, 2),
+            'G/P (%)': round(ticker_profit_loss_percentage, 2),
+            'Var. Diaria (€)': round(ticker_daily_profit_loss, 2),
+            'Var. Diaria (%)': round(ticker_daily_change_percentage, 2),
+        })
+
+    ticker_details_df = pd.DataFrame(data)
+    ticker_details_df = ticker_details_df.reset_index(drop=True)
+
+    def apply_styles(df):
+        styled = df.style.format(
+            {
+                'Invertido (€)': '{:.2f} €',
+                'Valor Actual (€)': '{:.2f} €',
+                'G/P (€)': '{:.2f} €',
+                'G/P (%)': '{:.2f}%',
+                'Var. Diaria (€)': '{:.2f} €',
+                'Var. Diaria (%)': '{:.2f}%',
+                'TIR': '{:.2%}',
+            }
+        )
+        
+        def color_tir(val):
+            if val < 0.10:
+                color = 'red'
+            elif val >= 0.10 and val <= 0.15:
+                color = 'green'
+            elif val > 0.15:
+                color = 'blue'
+            else:
+                color = 'black'  # Valor por defecto
+            return f'color: {color}'
+
+        styled = styled.applymap(color_tir, subset=['TIR'])
+
+        styled = styled.applymap(
+            lambda x: 'color: blue; font-weight: bold;',
+            subset=['Nombre']
+        )
+
+        styled = styled.applymap(
+            lambda x: 'color: green;' if isinstance(x, (int, float)) and x > 0 else 'color: red;' if isinstance(x, (int, float)) and x < 0 else '',
+            subset=['G/P (€)', 'G/P (%)', 'Var. Diaria (€)', 'Var. Diaria (%)']
+        )
+
+        return styled
+
+    # Aplicar estilos y mostrar la tabla
+    styled_df = apply_styles(ticker_details_df)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
 
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        exchange_rate = get_exchange_rate()
-        st.info(f"Tipo de cambio: 1 USD = {exchange_rate:.4f} EUR", icon="💱")
+    styled_subheader('Distribución de la Cartera')
 
-        # styled_subheader('Detalle de Inversiones por Ticker')
-        st.markdown("<br>", unsafe_allow_html=True)  # Añadir un espacio
+    portfolio_distribution_fig = plot_portfolio_distribution_bars(results)
+    if portfolio_distribution_fig is not None:
+        st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
+    else:
+        st.warning("No se pudo generar el gráfico de distribución de la cartera.")
 
-        # Crear el DataFrame con detalles de inversión por ticker
-        data = []
-        for ticker in results['Ticker'].unique():
-            ticker_results = results[results['Ticker'] == ticker]
-            ticker_invested = ticker_results['Total Invertido (EUR)'].values[0]
-            ticker_current_value = ticker_results['Valor Actual (EUR)'].values[0]
-            ticker_profit_loss = ticker_current_value - ticker_invested
-            ticker_profit_loss_percentage = (ticker_profit_loss / ticker_invested) * 100 if ticker_invested != 0 else 0
-
-            # Obtener valores existentes
-            ticker_daily_change = ticker_results['Variación Diaria (EUR)'].values[0] if 'Variación Diaria (EUR)' in ticker_results.columns else 0
-            ticker_daily_change_percentage = ticker_results['Variación Diaria %'].values[0] if 'Variación Diaria %' in ticker_results.columns else 0
-            ticker_shares = ticker_results['Acciones'].values[0] if 'Acciones' in ticker_results.columns else 0
-
-            # Calcular Ganancia/Pérdida Diaria en dinero
-            ticker_daily_profit_loss = ticker_daily_change * ticker_shares
-
-            # Agregar datos con dos decimales
-            data.append({
-                'Ticker': ticker,
-                'Invertido (€)': round(ticker_invested, 2),
-                'Valor Actual (€)': round(ticker_current_value, 2),
-                'G/P (€)': round(ticker_profit_loss, 2),
-                'G/P (%)': round(ticker_profit_loss_percentage, 2),
-                'Var. Diaria (€)': round(ticker_daily_profit_loss, 2),
-                'Var. Diaria (%)': round(ticker_daily_change_percentage, 2),
-            })
-
-        ticker_details_df = pd.DataFrame(data)
-        # Convertir el índice en una columna visible (opcional, si hace sentido incluirlo)
-        ticker_details_df = ticker_details_df.reset_index(drop=True)
-
-
-        # Función para aplicar estilos (verde/rojo) de forma directa
-        def apply_styles(df):
-            styled = df.style.format(
-                {
-                    'Invertido (€)': '{:.2f} €',
-                    'Valor Actual (€)': '{:.2f} €',
-                    'G/P (€)': '{:.2f} €',
-                    'G/P (%)': '{:.2f}%',
-                    'Var. Diaria (€)': '{:.2f} €',
-                    'Var. Diaria (%)': '{:.2f}%',
-                }
-            )
-                # Aplicar estilo azul y negrita a la columna Ticker
-            styled = styled.applymap(
-                lambda x: 'color: blue; font-weight: bold;',
-                subset=['Ticker']
-            )
-            # Aplicar colores para valores positivos y negativos
-            styled = styled.applymap(
-                lambda x: 'color: green;' if isinstance(x, (int, float)) and x > 0 else 'color: red;' if isinstance(x, (int, float)) and x < 0 else '',
-                subset=['G/P (€)', 'G/P (%)', 'Var. Diaria (€)', 'Var. Diaria (%)']
-            )
-            return styled
-
-        # Aplicar estilos y mostrar la tabla
-        styled_df = apply_styles(ticker_details_df)
-        st.dataframe(styled_df, use_container_width=True, hide_index=True, height=500)
-
-        styled_subheader('Distribución de la Cartera')
-
-        portfolio_distribution_fig = plot_portfolio_distribution_bars(results)
-        if portfolio_distribution_fig is not None:
-            st.plotly_chart(portfolio_distribution_fig, use_container_width=True)
-        else:
-            st.warning("No se pudo generar el gráfico de distribución de la cartera.")
-
-        styled_subheader('Evolución de la Inversión')  
-            
-        try:
-            # Calcular los datos de inversión a lo largo del tiempo
-            monthly_data = calculate_investment_value_over_time(df, results)
-                            
-            # Crear y mostrar el gráfico
-            investment_over_time_fig = plot_investment_over_time(df, results)
-            st.plotly_chart(investment_over_time_fig, use_container_width=True)
-            
-        except Exception as e:
-            st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
+    styled_subheader('Evolución de la Inversión')  
+        
+    try:
+        # Calcular los datos de inversión a lo largo del tiempo
+        monthly_data = calculate_investment_value_over_time(df, results)
+                        
+        # Crear y mostrar el gráfico
+        investment_over_time_fig = plot_investment_over_time(df, results)
+        st.plotly_chart(investment_over_time_fig, use_container_width=True)
+        
+    except Exception as e:
+        st.error(f"Error al generar el gráfico de evolución de la inversión: {str(e)}")
 
 if menu == menu2 and st.session_state.file_uploaded:
     
         styled_subheader('Work in progress')
 
 if menu == menu3 and st.session_state.file_uploaded:
+
+    # --- Datos Cargados ---
+    styled_subheader('Datos Cargados')
+
+    # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
+    df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
+    df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
+    df_to_display.reset_index(drop=True, inplace=True)
+
+    # Formatear columnas numéricas y de fechas
+    df_to_display['FECHA'] = df_to_display['FECHA'].apply(lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x)
+    df_to_display['VOLUMEN'] = df_to_display['VOLUMEN'].apply(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
+    df_to_display['PRECIO_ACCION'] = df_to_display['PRECIO_ACCION'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
+    df_to_display['PRECIO_OPERACION_EUR'] = df_to_display['PRECIO_OPERACION_EUR'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
+
+    # Configurar st-ag-grid para la tabla de Datos Cargados
+    gb = GridOptionsBuilder.from_dataframe(df_to_display)
+    gb.configure_pagination()
+    gb.configure_side_bar()
+    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
+
+    # Aplicar estilos a las columnas 'Ticker' y 'TIPO_OP'
+    gb.configure_column("TICKER", header_name="TICKER", cellStyle={'color': 'blue', 'font-weight': 'bold'})
+    gb.configure_column("TIPO_OP", header_name="TIPO_OP", cellStyle={
+        'styleConditions': [
+            {
+                'condition': "String(value) == 'BUY'",
+                'style': {'color': 'green', 'font-weight': 'bold'}
+            }
+        ]
+    })
+
+    gridOptions = gb.build()
+
+    AgGrid(
+        df_to_display,
+        gridOptions=gridOptions,
+        height=500,
+        width='100%',
+        fit_columns_on_grid_load=True,
+        allow_unsafe_jscode=True,
+        enable_quicksearch=True,
+        reload_data=True
+    )
 
     # --- Información de Empresas ---
     styled_subheader('Información de Empresas')
@@ -1628,51 +1861,8 @@ if menu == menu3 and st.session_state.file_uploaded:
         enable_quicksearch=True
     )
 
-    # --- Datos Cargados ---
-    styled_subheader('Datos Cargados')
-
-    # Seleccionar solo las columnas relevantes y reemplazar NaN con cadena vacía
-    df_to_display = df[['FECHA', 'TIPO_OP', 'TICKER', 'VOLUMEN', 'PRECIO_ACCION', 'PRECIO_OPERACION_EUR', 'COMENTARIO']].copy()
-    df_to_display.fillna("", inplace=True)  # Reemplaza NaN con cadena vacía
-    df_to_display.reset_index(drop=True, inplace=True)
-
-    # Formatear columnas numéricas y de fechas
-    df_to_display['FECHA'] = df_to_display['FECHA'].apply(lambda x: x.strftime('%Y-%m-%d') if isinstance(x, pd.Timestamp) else x)
-    df_to_display['VOLUMEN'] = df_to_display['VOLUMEN'].apply(lambda x: f"{x:.2f}" if isinstance(x, (int, float)) else x)
-    df_to_display['PRECIO_ACCION'] = df_to_display['PRECIO_ACCION'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
-    df_to_display['PRECIO_OPERACION_EUR'] = df_to_display['PRECIO_OPERACION_EUR'].apply(lambda x: f"{x:,.2f} €" if isinstance(x, (int, float)) else x)
-
-    # Configurar st-ag-grid para la tabla de Datos Cargados
-    gb = GridOptionsBuilder.from_dataframe(df_to_display)
-    gb.configure_pagination()
-    gb.configure_side_bar()
-    gb.configure_default_column(groupable=True, value=True, enableRowGroup=True, aggFunc="sum", editable=False)
-
-    # Aplicar estilos a las columnas 'Ticker' y 'TIPO_OP'
-    gb.configure_column("TICKER", header_name="TICKER", cellStyle={'color': 'blue', 'font-weight': 'bold'})
-    gb.configure_column("TIPO_OP", header_name="TIPO_OP", cellStyle={
-        'styleConditions': [
-            {
-                'condition': "String(value) == 'BUY'",
-                'style': {'color': 'green', 'font-weight': 'bold'}
-            }
-        ]
-    })
-
-    gridOptions = gb.build()
-
-    AgGrid(
-        df_to_display,
-        gridOptions=gridOptions,
-        height=500,
-        width='100%',
-        fit_columns_on_grid_load=True,
-        allow_unsafe_jscode=True,
-        enable_quicksearch=True,
-        reload_data=True
-    )
 if menu == menu4:
-    styled_subheader("📒 Elección de empresa")
+    styled_subheader("Elección de empresa")
 
     # Crear una lista de opciones con el formato "ticker - nombre"
     options = [f"{ticker} - {name}" for ticker, name in ticker_to_name.items()]
@@ -1695,6 +1885,8 @@ if menu == menu4:
             info = stock.info
             # Recuperar EPS y EPS without NRI
             trailing_eps = info.get('trailingEps', None)
+            listing_years = calculate_listing_years(selected_ticker)
+            return_10y = calculate_annualized_return_10y(selected_ticker)
 
             # Extract and process metrics
             metrics = {
@@ -1706,7 +1898,17 @@ if menu == menu4:
                 "ROE": {
                     "value": round(info.get('returnOnEquity', 0) * 100, 2),
                     "format": lambda x: f"{x}%",
-                    "thresholds": {"green": 15, "yellow": 8}
+                    "thresholds": {"green": 8, "yellow": 6}                    
+                },
+                "Years": {
+                    "value": listing_years,
+                    "format": lambda x: f"{x}",
+                    "thresholds": {"green": 10, "yellow": 8}
+                },
+                "Ret10y": {
+                    "value": return_10y,
+                    "format": lambda x: f"{x:.2f}%",
+                    "thresholds": {"green": 15, "yellow": 10}
                 },
                 "D/E": {
                     "value": round(info.get('debtToEquity', 0) / 100, 2),
@@ -1717,7 +1919,7 @@ if menu == menu4:
                 "CR": {
                     "value": round(info.get('currentRatio', 0), 2),
                     "format": lambda x: f"{x}",
-                    "thresholds": {"green": 2, "yellow": 1}
+                    "thresholds": {"green": 1.5, "yellow": 1}
                 },
                 "PE": {
                     "value": round(info.get('trailingPE', 0), 2),
@@ -1734,9 +1936,31 @@ if menu == menu4:
             }
             
             # Usar las variables de color en las tarjetas
-            cols = st.columns(3)
-            for idx, (metric_name, metric_data) in enumerate(metrics.items()):
-                with cols[idx % 3]:
+            # Primera fila
+            cols1 = st.columns(4)
+            for idx, (metric_name, metric_data) in enumerate(list(metrics.items())[:4]):
+                with cols1[idx]:
+                    value = metric_data["value"]
+                    formatted_value = metric_data["format"](value)
+                    thresholds = metric_data.get("thresholds")
+                    inverse = metric_data.get("inverse", False)
+
+                    if thresholds:
+                        bg_color = get_bg_color(value, thresholds, inverse)
+                    else:
+                        bg_color = ""
+
+                    st.markdown(f"""
+                        <div class="metric-card" style="{bg_color}">
+                            <div class="metric-label">{metric_name}</div>
+                            <div class="metric-value">{formatted_value}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+            
+            # Segunda fila
+            cols2 = st.columns(4)
+            for idx, (metric_name, metric_data) in enumerate(list(metrics.items())[4:]):
+                with cols2[idx]:
                     value = metric_data["value"]
                     formatted_value = metric_data["format"](value)
                     thresholds = metric_data.get("thresholds")
@@ -1754,7 +1978,7 @@ if menu == menu4:
                         </div>
                     """, unsafe_allow_html=True)
 
-            styled_subheader("💰 Análisis de Flujo de Efectivo")
+            styled_subheader("Análisis de Flujo de Efectivo")
             try:
                 cashflow = stock.quarterly_cashflow
                 if not cashflow.empty:
@@ -1804,7 +2028,7 @@ if menu == menu4:
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    styled_subheader("📈 Decisión sobre Cashflows")
+                    styled_subheader("Decisión sobre Cashflows")
                     metric_cols = st.columns(4)  # Volvemos a 4 columnas
 
                     for idx, column in enumerate(main_cashflows):
@@ -1825,9 +2049,9 @@ if menu == menu4:
                             st.markdown(f"""
                                 <div class="card-container">
                                     <div style="{card_color} padding: 10px; border-radius: 5px; text-align: center;" class="card-content">
-                                        <h4 style="margin: 0;">{column.replace("Cash Flow", "CF")}</h4>
-                                        <p style="margin: 0; font-size: 32px; font-weight: bold;">{change:+.1f}%</p>
-                                        <p style="margin: 0; font-size: 20px;">${last_value:,.0f}M</p>
+                                        <h4 style="margin: 0; font-size: 14px;">{column.replace("Cash Flow", "CF")}</h4>
+                                        <p style="margin: 0; font-size: 28px; font-weight: bold;">{change:+.1f}%</p>
+                                        <p style="margin: 0; font-size: 18px;">${last_value:,.0f}M</p>
                                     </div>
                                 </div>
                             """, unsafe_allow_html=True)
@@ -1838,7 +2062,6 @@ if menu == menu4:
 
         except Exception as e:
             st.error(f"Error al obtener datos para {selected_ticker}: {str(e)}")
-
 
         start_date = '2021-01-01'
         end_date = datetime.now()
@@ -1866,93 +2089,101 @@ if menu == menu4:
                 "Tasa de Crecimiento Terminal (%)", min_value=0.01, value=4.0, step=0.1, key="terminal_growth_rate"
             ) / 100
 
-            # Inicializar variables en session_state
-            if "iv_result" not in st.session_state:
-                st.session_state.iv_result = None
-                st.session_state.current_price = None
-                st.session_state.mos = None
-                st.session_state.calculate = False  # Control de cálculo
+        # Inicializar variables en session_state si no existen
+        if "iv_result" not in st.session_state:
+            st.session_state.iv_result = None
+            st.session_state.current_price = None
+            st.session_state.mos = None
+            st.session_state.calculate = False  # Control de cálculo
 
-    # Botón para calcular el valor intrínseco
-    if st.button("Calcular Valor Intrínseco"):
-        st.session_state.calculate = True  # Marcar que se debe calcular
-        try:
-            # Obtener datos del stock
-            stock_info = get_stock_info(selected_ticker)
-            trailing_eps = stock_info.get("trailingEps", None)
+        # Importante: Resetear el estado de cálculo al cambiar de empresa
+        if "previous_ticker" not in st.session_state or st.session_state.previous_ticker != selected_ticker:
+            st.session_state.calculate = False
+            st.session_state.iv_result = None # Importante resetear
+            st.session_state.current_price = None # Importante resetear
+            st.session_state.mos = None # Importante resetear
+            st.session_state.previous_ticker = selected_ticker
 
-            if trailing_eps is None:
-                st.error("El EPS (trailingEps) no está disponible para este ticker.")
+        # Botón para calcular el valor intrínseco
+        if st.button("Calcular Valor Intrínseco"):
+            st.session_state.calculate = True  # Marcar que se debe calcular
+            try:
+                # Obtener datos del stock
+                stock_info = get_stock_info(selected_ticker)
+                trailing_eps = stock_info.get("trailingEps", None)
+
+                if trailing_eps is None:
+                    st.error("El EPS (trailingEps) no está disponible para este ticker.")
+                    st.session_state.calculate = False  # Desactivar cálculo
+                    st.stop()
+
+                # Calcular el valor intrínseco
+                iv_result = calculate_intrinsic_value(
+                    eps=trailing_eps,
+                    discount_rate=discount_rate,
+                    growth_rate=growth_rate,
+                    growth_stage_years=growth_stage_years,
+                    terminal_growth_rate=terminal_growth_rate
+                )
+
+                if iv_result:
+                    current_price = get_current_price2(stock_info)
+                    mos = ((iv_result["intrinsic_value"] - current_price) / iv_result["intrinsic_value"]) * 100
+
+                    # Guardar resultados en el estado
+                    st.session_state.iv_result = iv_result
+                    st.session_state.current_price = current_price
+                    st.session_state.mos = mos
+                else:
+                    st.warning("No se pudo calcular el valor intrínseco.")
+                    st.session_state.calculate = False  # Desactivar cálculo
+            except Exception as e:
+                st.error(f"Error durante el cálculo: {str(e)}")
                 st.session_state.calculate = False  # Desactivar cálculo
-                st.stop()
 
-            # Calcular el valor intrínseco
-            iv_result = calculate_intrinsic_value(
-                eps=trailing_eps,
-                discount_rate=discount_rate,
-                growth_rate=growth_rate,
-                growth_stage_years=growth_stage_years,
-                terminal_growth_rate=terminal_growth_rate
-            )
+        # Mostrar los resultados solo si se presionó el botón y se calcularon los resultados
+        if st.session_state.calculate and st.session_state.iv_result:
+            iv_result = st.session_state.iv_result
+            current_price = st.session_state.current_price
+            mos = st.session_state.mos
 
-            if iv_result:
-                current_price = get_current_price2(stock_info)
-                mos = ((iv_result["intrinsic_value"] - current_price) / iv_result["intrinsic_value"]) * 100
+            st.subheader(f"Resultados para {selected_ticker}")
 
-                # Guardar resultados en el estado
-                st.session_state.iv_result = iv_result
-                st.session_state.current_price = current_price
-                st.session_state.mos = mos
-            else:
-                st.warning("No se pudo calcular el valor intrínseco.")
-                st.session_state.calculate = False  # Desactivar cálculo
-        except Exception as e:
-            st.error(f"Error durante el cálculo: {str(e)}")
-            st.session_state.calculate = False  # Desactivar cálculo
+            # Diseño con columnas para alinear las tarjetas
+            col1, col2, col3 = st.columns(3)
 
-    # Mostrar los resultados solo si se presionó el botón y se calcularon los resultados
-    if st.session_state.calculate and st.session_state.iv_result:
-        iv_result = st.session_state.iv_result
-        current_price = st.session_state.current_price
-        mos = st.session_state.mos
+            with col1:
+                # Tarjeta para el Precio Actual
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">Precio Actual</div>
+                        <div class="metric-value">${current_price:,.2f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-        st.subheader(f"Resultados para {selected_ticker}")
+            with col2:
+                # Tarjeta para el Valor Intrínseco
+                st.markdown(f"""
+                    <div class="metric-card">
+                        <div class="metric-label">Valor Intrínseco</div>
+                        <div class="metric-value">${iv_result['intrinsic_value']:,.2f}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-        # Diseño con columnas para alinear las tarjetas
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            # Tarjeta para el Precio Actual
-            st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">Precio Actual</div>
-                    <div class="metric-value">${current_price:,.2f}</div>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col2:
-            # Tarjeta para el Valor Intrínseco
-            st.markdown(f"""
-                <div class="metric-card">
-                    <div class="metric-label">Valor Intrínseco</div>
-                    <div class="metric-value">${iv_result['intrinsic_value']:,.2f}</div>
-                </div>
-            """, unsafe_allow_html=True)
-
-        with col3:
-            # Tarjeta para el Margen de Seguridad (MoS)
-            mos_color = "indicator-green" if mos > 0 else "indicator-red"
-            st.markdown(f"""
-                <div class="metric-card {mos_color}">
-                    <div class="metric-label">Margen de Seguridad (MoS)</div>
-                    <div class="metric-value">{mos:.2f}%</div>
-                </div>
-            """, unsafe_allow_html=True)
+            with col3:
+                # Tarjeta para el Margen de Seguridad (MoS)
+                mos_color = "indicator-green" if mos > 0 else "indicator-red"
+                st.markdown(f"""
+                    <div class="metric-card {mos_color}">
+                        <div class="metric-label">Margen de Seguridad (MoS)</div>
+                        <div class="metric-value">{mos:.2f}%</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
 if menu == menu5:
 
 # Título de la sección
-    styled_subheader('📈 Análisis del S&P 500')
+    styled_subheader('Análisis del S&P 500')
     
     # Resultado y recomendación del análisis
     resultado, recomendacion, df_analysis = analizar_sp500()
@@ -1975,6 +2206,7 @@ if menu == menu5:
         ))
     
     fig.update_layout(
+       # margin=dict(l=40, r=0, t=20, b=0),  # Ajustar el valor de t (margen superior)
         xaxis_title='Fecha',
         yaxis_title='Valor de Cierre ($)',
         yaxis_tickformat='$,.0f',
@@ -1984,16 +2216,7 @@ if menu == menu5:
     
     st.plotly_chart(fig)
 
-    # Mostrar análisis y recomendación con HTML para el color
-    st.markdown(
-        f"""
-        <div style="background-color: #f0f8ff; padding: 10px; border-radius: 5px; border: 1px solid #cce7ff;">
-            📈 Resultado del análisis: <span style="color:{resultado_color}; font-weight:normal;">{resultado}</span> |
-             <span style="font-weight:normal;">{recomendacion}</span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+
 if menu == menu6:
     styled_subheader("Análisis Multi-Empresa")
     sp500_tickers = ['AAPL', 'NVDA', 'MSFT', 'AMZN', 'GOOGL', 'GOOG', 'META', 'TSLA', 'AVGO', 'WMT', 'LLY', 'JPM', 'V', 'UNH', 'ORCL', 'MA', 'XOM', 'COST', 'HD', 'PG', 'NFLX', 'JNJ', 'BAC', 'CRM', 'ABBV', 'CVX', 'KO', 'TMUS', 'MRK', 'WFC', 'ADBE', 'CSCO', 'BX', 'NOW', 'ACN', 'PEP', 'AXP', 'IBM', 'MCD', 'LIN', 'MS', 'DIS', 'TMO', 'AMD', 'ABT', 'PM', 'ISRG', 'CAT', 'GS', 'GE', 'INTU', 'VZ', 'QCOM', 'TXN', 'BKNG', 'DHR', 'T', 'PLTR', 'BLK', 'RTX', 'SPGI', 'NEE', 'CMCSA', 'LOW', 'PGR', 'HON', 'AMGN', 'PFE', 'KKR', 'SCHW', 'UNP', 'SYK', 'ETN', 'TJX', 'AMAT', 'ANET', 'C', 'COP', 'BSX', 'PANW', 'UBER', 'BA', 'DE', 'ADP', 'VRTX', 'LMT', 'MU', 'FI', 'NKE', 'GILD', 'BMY', 'CB', 'SBUX', 'UPS', 'ADI', 'MDT', 'MMC', 'PLD', 'LRCX', 'GEV', 'EQIX', 'AMT', 'MO', 'SHW', 'PYPL', 'SO', 'ELV', 'ICE', 'TT', 'CRWD', 'MCO', 'APH', 'KLAC', 'CMG', 'INTC', 'PH', 'WM', 'CTAS', 'CME', 'DUK', 'REGN', 'MDLZ', 'CDNS', 'ABNB', 'CI', 'DELL', 'HCA', 'MAR', 'WELL', 'ZTS', 'ITW', 'PNC', 'USB', 'MSI', 'AON', 'SNPS', 'CL', 'FTNT', 'CEG', 'EMR', 'ORLY', 'MCK', 'GD', 'EOG', 'AJG', 'COF', 'TDG', 'ECL', 'MMM', 'NOC', 'APD', 'FDX', 'SPG', 'RCL', 'WMB', 'CARR', 'RSG', 'ADSK', 'BDX', 'CVS', 'CSX', 'DLR', 'HLT', 'TGT', 'FCX', 'PCAR', 'TFC', 'OKE', 'KMI', 'CPRT', 'ROP', 'AFL', 'SLB', 'GM', 'MET', 'BK', 'AZO', 'SRE', 'TRV', 'PSA', 'NSC', 'GWW', 'NXPI', 'JCI', 'CHTR', 'AMP', 'FICO', 'ALL', 'URI', 'MNST', 'PSX', 'ROST', 'PAYX', 'CMI', 'AEP', 'AXON', 'PWR', 'VST', 'MSCI', 'MPC']
